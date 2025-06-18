@@ -1,1 +1,1 @@
-# web-app
+# Video Generation Application
