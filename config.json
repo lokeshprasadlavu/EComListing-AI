@@ -1,11 +1,11 @@
 {
   "openai_api_key":        "${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}",
-  "csv_products":         "/content/drive/MyDrive/Capstone Project/All_Products_Data_2October2024.csv",
-  "output_folder":        "/content/drive/MyDrive/Capstone Project/GeneratedVideos",
-  "audio_folder":         "/content/drive/MyDrive/Capstone Project/TemporaryAudio",
-  "fonts_folder":         "/content/drive/MyDrive/Capstone Project/Fonts",
-  "poppins_zip":          "/content/drive/MyDrive/Capstone Project/Poppins.zip",
-  "logo_path":            "/content/drive/MyDrive/Capstone Project/updated_trustclarity_logo.png",
-  "images_json":          "/content/drive/MyDrive/Capstone Project/ImagesData.json",
+  "csv_products":         "/content/drive/MyDrive/Project/All_Products_Data_2October2024.csv",
+  "output_folder":        "/content/drive/MyDrive/Project/GeneratedVideos",
+  "audio_folder":         "/content/drive/MyDrive/Project/TemporaryAudio",
+  "fonts_folder":         "/content/drive/MyDrive/Project/Fonts",
+  "poppins_zip":          "/content/drive/MyDrive/Project/Poppins.zip",
+  "logo_path":            "/content/drive/MyDrive/Project/updated_logo.png",
+  "images_json":          "/content/drive/MyDrive/Project/ImagesData.json",
   "youtube_secrets":      "/content/drive/MyDrive/VideoGen/client_secrets.json"
 }
