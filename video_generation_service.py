@@ -328,9 +328,6 @@ def create_videos_and_blogs_from_csv(input_csv_file, images_data, products_df, o
             title_file.write(title)
         print(f"Title saved for Listing Id: {listing_id}, Product Id: {product_id} at {title_file_path}")
 
-input_csv_file='/content/drive/MyDrive/Capstone Project/fiber_products.csv'
-output_base_folder=output_folder
-create_videos_and_blogs_from_csv(input_csv_file, images_data, products_df, output_base_folder)
 def upload_videos_streamlit(output_folder: str, upload_fn, embed_fn) -> list:
     results=[]
     for sub in os.listdir(output_folder):
