@@ -1,6 +1,6 @@
 {
   "openai_api_key":        "${your-apikey-here}",
-  "csv_products":         "/content/drive/MyDrive/Project/All_Products_Data_2October2024.csv",
+  "csv_products":         "/content/drive/MyDrive/Project/Products,csv",
   "output_folder":        "/content/drive/MyDrive/Project/GeneratedVideos",
   "audio_folder":         "/content/drive/MyDrive/Project/TemporaryAudio",
   "fonts_folder":         "/content/drive/MyDrive/Project/Fonts",
