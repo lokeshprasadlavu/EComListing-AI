@@ -239,8 +239,8 @@ def create_videos_and_blogs_from_csv(input_csv_file, images_data, products_df, o
     """
     import os
 
-    # Read the input CSV file
-    product_list = pd.read_csv(input_csv_file)
+    # # Read the input CSV file
+    # product_list = pd.read_csv(input_csv_file)
 
     # Convert images_data to a dictionary for quick lookup
     # Key: (listing_id, product_id), Value: images
@@ -253,11 +253,11 @@ def create_videos_and_blogs_from_csv(input_csv_file, images_data, products_df, o
             key = (listing_id, product_id)
             image_data_dict[key] = images
 
-    # Loop over each product in the input CSV file
-    for index, row in product_list.iterrows():
-        listing_id = int(row['listing_id'])
-        product_id = int(row['product_id'])
-        key = (listing_id, product_id)
+    # # Loop over each product in the input CSV file
+    # for index, row in product_list.iterrows():
+    #     listing_id = int(row['listing_id'])
+    #     product_id = int(row['product_id'])
+    #     key = (listing_id, product_id)
 
         # Check for images
         images = image_data_dict.get(key)
