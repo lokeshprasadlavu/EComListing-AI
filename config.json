@@ -1,5 +1,5 @@
 {
-  "openai_api_key":        "${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}",
+  "openai_api_key":        "${your-apikey-here}",
   "csv_products":         "/content/drive/MyDrive/Project/All_Products_Data_2October2024.csv",
   "output_folder":        "/content/drive/MyDrive/Project/GeneratedVideos",
   "audio_folder":         "/content/drive/MyDrive/Project/TemporaryAudio",
