@@ -1,73 +1,113 @@
-import os, uuid, json, pandas as pd, time
+import os
+import json
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
-from video_helpers        import (
-    ensure_clean_dirs,
-    clean_text,
-    split_text_into_slides,
-)
-from transcript           import get_video_transcript
-from audio_helpers        import create_audio_with_gtts
-from video_gen            import create_video_for_product
-from batch_pipeline       import create_videos_and_blogs_from_csv, upload_videos_streamlit
-from youtube_uploader     import upload_video_to_youtube
+import pandas as pd
+import video_generation_service as vgs
+from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
 
-# ─── Config & Setup ───────────────────────────────────────────────
-st.set_page_config(page_title="TrustClarity AI Video", layout="wide")
-ensure_clean_dirs("output", "audio", "fonts")
+# Load and expand config
+CONFIG_PATH = "config.json"
+@st.cache_data
 
-# Streamlit Sidebar
-mode = st.sidebar.radio("Mode", ["Single", "Batch CSV", "Batch Upload"])
-st.sidebar.markdown("---")
+def load_config(path):
+    raw = open(path, 'r').read()
+    expanded = os.path.expandvars(raw)
+    return json.loads(expanded)
 
-# ─── Single-Video Mode ─────────────────────────────────────────────
-if mode == "Single":
+cfg = load_config(CONFIG_PATH)
+
+# Ensure environment
+os.environ.setdefault("OPENAI_API_KEY", cfg.get("openai_api_key", ""))
+
+# Patch module-level constants
+vgs.CSV_FILE      = cfg.get("csv_products")
+vgs.OUTPUT_FOLDER = cfg.get("output_folder")
+vgs.AUDIO_FOLDER  = cfg.get("audio_folder")
+vgs.FONTS_FOLDER  = cfg.get("fonts_folder")
+vgs.POPPINS_ZIP   = cfg.get("poppins_zip")
+vgs.LOGO_PATH     = cfg.get("logo_path")
+vgs.IMAGES_JSON   = cfg.get("images_json")
+
+# Streamlit UI
+st.set_page_config(page_title="AI Video Generator", layout="wide")
+st.title("📹 AI Video Generator")
+
+mode = st.sidebar.radio("Select mode", ["Single Product", "Batch from CSV"])
+
+if mode == "Single Product":
     st.header("Single Product Video")
-    listing_id = st.text_input("Listing ID")
-    product_id = st.text_input("Product ID")
-    title      = st.text_input("Title")
-    desc       = st.text_area("Description")
-    imgs_json  = st.file_uploader("Image metadata JSON", accept_multiple_files=True, type="json")
-
-    if st.button("Generate & Preview"):
-        if not all([listing_id, product_id, title, desc, imgs_json]):
-            st.error("Fill in all fields & upload at least one JSON.")
+    listing_id  = st.text_input("Listing ID")
+    product_id  = st.text_input("Product ID")
+    title       = st.text_input("Product Title")
+    description = st.text_area("Product Description", height=150)
+    uploaded_images = st.file_uploader(
+        "Upload product images", type=["png","jpg","jpeg"], accept_multiple_files=True
+    )
+    if st.button("Generate Video"):
+        if not (listing_id and product_id and title and description and uploaded_images):
+            st.error("All fields and at least one image are required.")
         else:
-            images = [json.loads(f.read()) for f in imgs_json]
-            out_dir = "output"
-            create_video_for_product(
-                listing_id, product_id, title, desc, images, out_dir
-            )
-            out_file = f"{out_dir}/{listing_id}_{product_id}.mp4"
-            st.video(out_file)
+            temp_dir = os.path.join("./temp_uploads")
+            os.makedirs(temp_dir, exist_ok=True)
+            images = []
+            for f in uploaded_images:
+                path = os.path.join(temp_dir, f.name)
+                with open(path, "wb") as out:
+                    out.write(f.getbuffer())
+                images.append({"imageURL": path})
 
-# ─── Batch CSV Mode ───────────────────────────────────────────────
-elif mode == "Batch CSV":
-    st.header("Batch Videos & Blogs from CSV")
-    csv_file     = st.file_uploader("Products CSV", type="csv")
-    json_file    = st.file_uploader("Images JSON", type="json")
-    master_csv   = st.file_uploader("Master Products CSV", type="csv")
+            os.makedirs(cfg["output_folder"], exist_ok=True)
+            st.info("Generating video...")
+            try:
+                create_video_for_product(
+                    listing_id,
+                    product_id,
+                    title,
+                    description,
+                    images,
+                    cfg["output_folder"]
+                )
+                video_path = os.path.join(cfg["output_folder"], f"{listing_id}_{product_id}.mp4")
+                if os.path.exists(video_path):
+                    st.success("Video generated!")
+                    st.video(video_path)
+                else:
+                    st.error("Video not found after generation.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-    if st.button("Run Batch"):
-        if not (csv_file and json_file and master_csv):
-            st.error("Upload all three files.")
-        else:
-            tmp_csv  = "/tmp/products.csv"; open(tmp_csv,  "wb").write(csv_file.getbuffer())
-            tmp_json = "/tmp/images.json";  open(tmp_json, "wb").write(json_file.getbuffer())
-            tmp_master = "/tmp/master.csv"; open(tmp_master,"wb").write(master_csv.getbuffer())
-
-            images_data = json.loads(open(tmp_json).read())
-            products_df = pd.read_csv(tmp_master)
-            create_videos_and_blogs_from_csv(tmp_csv, images_data, products_df, "output")
-            st.success("Batch complete! Check `output/` folder.")
-
-# ─── Batch Upload Mode ─────────────────────────────────────────────
 else:
-    st.header("Batch Upload to YouTube")
-    if st.button("Upload All Videos"):
-        results = upload_videos_streamlit("output")
-        for name, success, info in results:
-            if success:
-                st.success(f"{name} → {info}")
-            else:
-                st.error(f"{name} failed: {info}")
+    st.header("Batch Generation from CSV")
+    csv_file = st.file_uploader("Upload products CSV", type=["csv"])
+    images_json = st.file_uploader("Upload images JSON (optional)", type=["json"])
+    if st.button("Run Batch"): 
+        if not csv_file:
+            st.error("Please upload a CSV to proceed.")
+        else:
+            # Save uploads
+            csv_path = os.path.join("./temp_uploads", csv_file.name)
+            os.makedirs("./temp_uploads", exist_ok=True)
+            with open(csv_path, "wb") as out:
+                out.write(csv_file.getbuffer())
+            cfg["csv_products"] = csv_path
+
+            images_data = {}
+            if images_json:
+                json_path = os.path.join("./temp_uploads", images_json.name)
+                with open(json_path, "wb") as out:
+                    out.write(images_json.getbuffer())
+                images_data = json.load(open(json_path))
+            
+            df = pd.read_csv(cfg["csv_products"])
+            os.makedirs(cfg["output_folder"], exist_ok=True)
+            st.info("Running batch generation...")
+            try:
+                create_videos_and_blogs_from_csv(
+                    input_csv_file     = cfg["csv_products"],
+                    images_data        = images_data,
+                    products_df        = df,
+                    output_base_folder = cfg["output_folder"]
+                )
+                st.success("Batch run complete! Videos are in the output folder.")
+            except Exception as e:
+                st.error(f"Batch error: {e}")
