@@ -11,7 +11,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 drive_folder_id = None  # This will be set by app.py
 
 def get_drive_service():
-    sa_key = json.loads(st.secrets["drive_service_account"]["key"])
+    sa_key = st.secrets["drive_service_account"]
     creds = service_account.Credentials.from_service_account_info(sa_key, scopes=SCOPES)
     return build("drive", "v3", credentials=creds)
 
