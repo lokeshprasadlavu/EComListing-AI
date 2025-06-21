@@ -1,6 +1,4 @@
-# drive_db.py
-
-import io, json, os
+import io, json, os, streamlit as st
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
@@ -10,10 +8,8 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")
 
 def get_drive_service():
-    # 1. Load service-account key from env or Streamlit secrets
-    sa_info = os.getenv("GDRIVE_SA_KEY") or json.loads(
-        os.getenv("DRIVE_SERVICE_ACCOUNT_KEY_JSON")  # or st.secrets
-    )
+    # Load service-account key from Streamlit secrets
+    sa_info = json.loads(st.secrets["drive_service_account"]["key"])
     creds = service_account.Credentials.from_service_account_info(
         sa_info, scopes=SCOPES
     )

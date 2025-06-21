@@ -5,6 +5,7 @@ import pandas as pd
 import video_generation_service as vgs
 from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
 import drive_db
+import json
 
 # Streamlit page config
 st.set_page_config(page_title="AI Video Generator (Drive-Backed)", layout="wide")

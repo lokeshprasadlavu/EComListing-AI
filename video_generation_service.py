@@ -7,8 +7,65 @@ import numpy as np
 from io import BytesIO
 from gtts import gTTS
 from PIL import Image, ImageDraw, ImageFont
+import zipfile
+import shutil
 from moviepy.editor import ImageSequenceClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 import openai
+
+# Prerequisites
+with open("config.json", "r") as f:
+    config = json.load(f)
+csv_file = config["csv_products"]
+output_folder = config["output_folder"]
+fonts_folder = config["fonts_folder"]
+audio_folder = config["audio_folder"]
+poppins_zip = config["poppins_zip"]
+logo_path = config["logo_path"]
+images_json = config["images_json"]
+
+# List of folders to clean
+folders_to_clean = [output_folder, audio_folder, fonts_folder]
+
+for folder in folders_to_clean:
+    # Check if the folder exists
+    if os.path.exists(folder):
+        # Iterate over the contents of the folder
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # Remove file or link
+                    print(f"Deleted file: {file_path}")
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)  # Remove directory and its contents
+                    print(f"Deleted directory: {file_path}")
+            except Exception as e:
+                print(f'Failed to delete {file_path}. Reason: {e}')
+    else:
+        # Create the folder if it doesn't exist
+        os.makedirs(folder)
+        print(f"Created folder: {folder}")
+
+# Function to extract fonts from ZIP file
+def extract_fonts_from_zip(zip_file_path, extract_to_folder):
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to_folder)
+
+# Path to the ZIP file containing the Roboto fonts
+extract_fonts_from_zip(poppins_zip, fonts_folder)
+
+# Loading JSON data for images
+with open(images_json, 'r') as f:
+    images_data = json.load(f)
+
+# Loading CSV data for product descriptions
+products_df = pd.read_csv(csv_file)
+
+# Loading logo
+logo = Image.open(logo_path).convert("RGBA")
+logo_width, logo_height = logo.size
+logo.thumbnail((150, 150))  # Resize logo to fit nicely in the corner
+
 
 # === ChatGPT Utilities ===
 
