@@ -15,21 +15,23 @@ from video_generation_service import (
 )
 import drive_db
 
-# ─── Page Config & Authentication ────────────────────────────────────────────
+# ─── Page Config & Auth ──────────────────────────────────────────────────────
 st.set_page_config(page_title="AI Video Generator", layout="wide")
 st.title("📹 AI Video Generator")
 
 # Load secrets
-openai_api_key   = st.secrets["OPENAI_API_KEY"]
-drive_folder_id  = st.secrets["DRIVE_FOLDER_ID"]
+openai_api_key  = st.secrets["OPENAI_API_KEY"]
+drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 os.environ["OPENAI_API_KEY"] = openai_api_key
-drive_db.DRIVE_FOLDER_ID     = drive_folder_id
 
-# Ensure Drive sub-folders exist
-inputs_id   = drive_db.find_or_create_folder("inputs")
-outputs_id  = drive_db.find_or_create_folder("outputs")
-fonts_id    = drive_db.find_or_create_folder("fonts")
-logo_id     = drive_db.find_or_create_folder("logo")
+# Set default in drive_db
+drive_db.DRIVE_FOLDER_ID = drive_folder_id
+
+# Explicitly create/find sub-folders under your root
+inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id=drive_folder_id)
+outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)
+fonts_id    = drive_db.find_or_create_folder("fonts",   parent_id=drive_folder_id)
+logo_id     = drive_db.find_or_create_folder("logo",    parent_id=drive_folder_id)
 
 @st.cache_data
 def list_drive(mime_filter, parent_id):
@@ -47,7 +49,7 @@ if mode == "Single Product":
     title       = st.text_input("Product Title")
     description = st.text_area("Product Description", height=150)
 
-    # Choose images from Drive "inputs"
+    # Select images from inputs folder
     img_files = list_drive("image/", inputs_id)
     img_names = [f["name"] for f in img_files]
     selected  = st.multiselect("Select product images", img_names)
@@ -90,7 +92,6 @@ if mode == "Single Product":
                     with open(logo_path, "wb") as lf:
                         lf.write(lbuf.read())
 
-                    # PIL processing
                     logo = Image.open(logo_path).convert("RGBA")
                     logo.thumbnail((150, 150))
                     logo.save(logo_path)
@@ -109,12 +110,12 @@ if mode == "Single Product":
 
                 # 5) Generate video
                 create_video_for_product(
-                    listing_id   = listing_id,
-                    product_id   = product_id,
-                    title        = title,
-                    text         = description,
-                    images       = images,
-                    output_folder= tmpdir,
+                    listing_id    = listing_id,
+                    product_id    = product_id,
+                    title         = title,
+                    text          = description,
+                    images        = images,
+                    output_folder = tmpdir,
                 )
 
                 # 6) Upload video back to Drive
