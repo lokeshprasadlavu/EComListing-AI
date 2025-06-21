@@ -4,3 +4,4 @@ __pycache__/
 instance/
 *.log
 /tests/sample1.jpg
+.streamlit/secrets.toml

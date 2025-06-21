@@ -47,7 +47,7 @@ def get_video_transcript(title, description):
 
     return get_chatgpt_response(prompt)
 
-# === Text Helpers ===
+# === Text Refinement ===
 
 def clean_text(text: str) -> str:
     return text.encode('latin-1', 'replace').decode('latin-1')
@@ -96,7 +96,7 @@ def split_text(text, font, max_width):
         lines.append(current_line.strip())
     return lines
 
-# === Audio Helpers ===
+# === Audio Generation ===
 
 def create_audio_with_gtts(text, output_path):
     """
