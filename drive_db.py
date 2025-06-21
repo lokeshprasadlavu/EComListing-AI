@@ -1,23 +1,24 @@
 import io
-import json
 import os
 import streamlit as st
-import tempfile
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
-drive_folder_id = None  # This will be set by app.py
+DRIVE_FOLDER_ID = None  # will be set by app.py
 
 def get_drive_service():
-    sa_key = st.secrets["drive_service_account"]
-    creds = service_account.Credentials.from_service_account_info(sa_key, scopes=SCOPES)
+    # Pull the structured service-account dict from secrets
+    sa_info = st.secrets["drive_service_account"]
+    creds   = service_account.Credentials.from_service_account_info(
+        sa_info, scopes=SCOPES
+    )
     return build("drive", "v3", credentials=creds)
 
 def list_files(mime_filter=None, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or drive_folder_id
+    pid = parent_id or DRIVE_FOLDER_ID
     q = f"'{pid}' in parents and trashed = false"
     if mime_filter:
         q += f" and mimeType contains '{mime_filter}'"
@@ -26,9 +27,9 @@ def list_files(mime_filter=None, parent_id=None):
 
 def download_file(file_id):
     svc = get_drive_service()
-    req = svc.files().get_media(fileId=file_id)
+    request = svc.files().get_media(fileId=file_id)
     buf = io.BytesIO()
-    downloader = MediaIoBaseDownload(buf, req)
+    downloader = MediaIoBaseDownload(buf, request)
     done = False
     while not done:
         _, done = downloader.next_chunk()
@@ -37,8 +38,8 @@ def download_file(file_id):
 
 def upload_file(name, data, mime_type, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or drive_folder_id
-    # see if exists
+    pid = parent_id or DRIVE_FOLDER_ID
+    # Check if file exists
     existing = svc.files().list(
         q=f"name='{name}' and '{pid}' in parents",
         fields="files(id)"
@@ -47,12 +48,12 @@ def upload_file(name, data, mime_type, parent_id=None):
     if existing:
         return svc.files().update(fileId=existing[0]["id"], media_body=media).execute()
     else:
-        meta = {"name": name, "parents": [pid]}
-        return svc.files().create(body=meta, media_body=media).execute()
+        metadata = {"name": name, "parents": [pid]}
+        return svc.files().create(body=metadata, media_body=media).execute()
 
 def find_folder(name, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or drive_folder_id
+    pid = parent_id or DRIVE_FOLDER_ID
     q = (
         f"name='{name}' and mimeType='application/vnd.google-apps.folder' "
         f"and '{pid}' in parents and trashed=false"
@@ -63,13 +64,14 @@ def find_folder(name, parent_id=None):
 
 def create_folder(name, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or drive_folder_id
-    meta = {
+    pid = parent_id or DRIVE_FOLDER_ID
+    metadata = {
         "name": name,
         "mimeType": "application/vnd.google-apps.folder",
         "parents": [pid],
     }
-    return svc.files().create(body=meta, fields="id").execute()["id"]
+    folder = svc.files().create(body=metadata, fields="id").execute()
+    return folder["id"]
 
 def find_or_create_folder(name, parent_id=None):
     fid = find_folder(name, parent_id)
