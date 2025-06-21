@@ -5,7 +5,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 # This will be populated from your config loader or st.secrets:
-DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")
+DRIVE_FOLDER_ID = st.secrets["drive_service_account"]["drive_folder_id"]
 
 def get_drive_service():
     # Load service-account key from Streamlit secrets
