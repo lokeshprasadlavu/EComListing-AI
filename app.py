@@ -1,116 +1,230 @@
-import os, json, tempfile
+import os
+import io
+import json
+import zipfile
+import tempfile
+
 import streamlit as st
 import pandas as pd
+from PIL import Image
+
 import video_generation_service as vgs
-from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
+from video_generation_service import (
+    create_video_for_product,
+    create_videos_and_blogs_from_csv,
+)
 import drive_db
 
+# ─── Page Config & Authentication ────────────────────────────────────────────
 st.set_page_config(page_title="AI Video Generator", layout="wide")
 st.title("📹 AI Video Generator")
 
-# ── Authenticate & set Drive root ─────────────────
-OPENAI_API_KEY  = st.secrets["OPENAI_API_KEY"]
-DRIVE_FOLDER_ID = st.secrets["DRIVE_FOLDER_ID"]
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-drive_db.DRIVE_FOLDER_ID = DRIVE_FOLDER_ID
+# Load secrets
+openai_api_key   = st.secrets["OPENAI_API_KEY"]
+drive_folder_id  = st.secrets["DRIVE_FOLDER_ID"]
+os.environ["OPENAI_API_KEY"] = openai_api_key
+drive_db.DRIVE_FOLDER_ID     = drive_folder_id
 
-# Create or get sub-folders
-INPUTS_ID   = drive_db.find_or_create_folder("inputs")
-OUTPUTS_ID  = drive_db.find_or_create_folder("outputs")
-FONTS_ID    = drive_db.find_or_create_folder("fonts")
-LOGO_ID     = drive_db.find_or_create_folder("logo")
+# Ensure Drive sub-folders exist
+inputs_id   = drive_db.find_or_create_folder("inputs")
+outputs_id  = drive_db.find_or_create_folder("outputs")
+fonts_id    = drive_db.find_or_create_folder("fonts")
+logo_id     = drive_db.find_or_create_folder("logo")
 
 @st.cache_data
-def list_drive(mime, parent):
-    return drive_db.list_files(mime_filter=mime, parent_id=parent)
+def list_drive(mime_filter, parent_id):
+    return drive_db.list_files(mime_filter=mime_filter, parent_id=parent_id)
 
+# ─── Mode Selection ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch from CSV"])
 
+# ─── Single Product ──────────────────────────────────────────────────────────
 if mode == "Single Product":
     st.header("Single Product Video Generation")
-    lid = st.text_input("Listing ID"); pid = st.text_input("Product ID")
-    title = st.text_input("Product Title"); desc = st.text_area("Description", height=150)
 
-    # images from inputs
-    imgs = list_drive("image/", INPUTS_ID)
-    choices = [f["name"] for f in imgs]
-    selected = st.multiselect("Select images", choices)
+    listing_id  = st.text_input("Listing ID")
+    product_id  = st.text_input("Product ID")
+    title       = st.text_input("Product Title")
+    description = st.text_area("Product Description", height=150)
+
+    # Choose images from Drive "inputs"
+    img_files = list_drive("image/", inputs_id)
+    img_names = [f["name"] for f in img_files]
+    selected  = st.multiselect("Select product images", img_names)
 
     if st.button("Generate Video"):
-        if not all([lid, pid, title, desc, selected]):
-            st.error("Fill all fields + pick ≥1 image")
+        if not (listing_id and product_id and title and description and selected):
+            st.error("Please fill all fields and select at least one image.")
         else:
-            with tempfile.TemporaryDirectory() as tmp:
-                # download selected
-                images=[]
+            with tempfile.TemporaryDirectory() as tmpdir:
+                # 1) Download images
+                images = []
                 for name in selected:
-                    meta = next(f for f in imgs if f["name"]==name)
-                    buf = drive_db.download_file(meta["id"])
-                    p = os.path.join(tmp, name)
-                    open(p,"wb").write(buf.read())
-                    images.append({"imageURL":p})
+                    meta = next(f for f in img_files if f["name"] == name)
+                    buf  = drive_db.download_file(meta["id"])
+                    path = os.path.join(tmpdir, name)
+                    with open(path, "wb") as f:
+                        f.write(buf.read())
+                    images.append({"imageURL": path})
 
-                # patch globals
-                vgs.AUDIO_FOLDER=tmp; vgs.FONTS_FOLDER=tmp; vgs.LOGO_PATH=None
-
-                # generate locally
-                create_video_for_product(lid, pid, title, desc, images, tmp)
-
-                # upload result
-                fname = f"{lid}_{pid}.mp4"
-                outpath = os.path.join(tmp, fname)
-                if os.path.exists(outpath):
-                    data = open(outpath,"rb").read()
-                    drive_db.upload_file(fname, data, "video/mp4", parent_id=OUTPUTS_ID)
-                    st.success(f"Uploaded {fname}")
-                    st.video(outpath)
+                # 2) Download & unzip fonts.zip if present
+                font_zips = list_drive("application/zip", fonts_id)
+                if font_zips:
+                    zmeta = font_zips[0]
+                    zbuf  = drive_db.download_file(zmeta["id"])
+                    zpath = os.path.join(tmpdir, zmeta["name"])
+                    with open(zpath, "wb") as zf:
+                        zf.write(zbuf.read())
+                    with zipfile.ZipFile(zpath, "r") as zf:
+                        zf.extractall(os.path.join(tmpdir, "fonts"))
+                    vgs.fonts_folder = os.path.join(tmpdir, "fonts")
                 else:
-                    st.error("Generation failed")
+                    vgs.fonts_folder = tmpdir
 
+                # 3) Download & process logo
+                logo_files = list_drive("image/", logo_id)
+                if logo_files:
+                    lmeta     = logo_files[0]
+                    lbuf      = drive_db.download_file(lmeta["id"])
+                    logo_path = os.path.join(tmpdir, lmeta["name"])
+                    with open(logo_path, "wb") as lf:
+                        lf.write(lbuf.read())
+
+                    # PIL processing
+                    logo = Image.open(logo_path).convert("RGBA")
+                    logo.thumbnail((150, 150))
+                    logo.save(logo_path)
+
+                    vgs.logo       = logo
+                    vgs.logo_path  = logo_path
+                    vgs.logo_width, vgs.logo_height = logo.size
+                else:
+                    vgs.logo       = None
+                    vgs.logo_path  = None
+                    vgs.logo_width = vgs.logo_height = 0
+
+                # 4) Patch audio & output folders
+                vgs.audio_folder  = tmpdir
+                vgs.output_folder = tmpdir
+
+                # 5) Generate video
+                create_video_for_product(
+                    listing_id   = listing_id,
+                    product_id   = product_id,
+                    title        = title,
+                    text         = description,
+                    images       = images,
+                    output_folder= tmpdir,
+                )
+
+                # 6) Upload video back to Drive
+                video_name = f"{listing_id}_{product_id}.mp4"
+                video_path = os.path.join(tmpdir, video_name)
+                if os.path.exists(video_path):
+                    data = open(video_path, "rb").read()
+                    drive_db.upload_file(
+                        name      = video_name,
+                        data      = data,
+                        mime_type = "video/mp4",
+                        parent_id = outputs_id,
+                    )
+                    st.success(f"✅ Uploaded {video_name}")
+                    st.video(video_path)
+                else:
+                    st.error("❌ Video generation failed.")
+
+# ─── Batch from CSV ───────────────────────────────────────────────────────────
 else:
-    st.header("Batch from CSV")
-    csvs = list_drive("text/csv", INPUTS_ID)
-    csv_name = st.selectbox("Choose CSV", [f["name"] for f in csvs])
-    jsons = list_drive("application/json", INPUTS_ID)
-    json_name = st.selectbox("Choose JSON (opt)", ["(none)"]+[f["name"] for f in jsons])
+    st.header("Batch Video & Blog Generation from CSV")
+
+    csv_files  = list_drive("text/csv", inputs_id)
+    csv_name   = st.selectbox("Choose Products CSV", [f["name"] for f in csv_files])
+    json_files = list_drive("application/json", inputs_id)
+    json_name  = st.selectbox("Choose Images JSON (optional)", ["(none)"] + [f["name"] for f in json_files])
 
     if st.button("Run Batch"):
-        with tempfile.TemporaryDirectory() as tmp:
-            # download CSV
-            meta = next(f for f in csvs if f["name"]==csv_name)
-            buf = drive_db.download_file(meta["id"])
-            csvp = os.path.join(tmp, csv_name)
-            open(csvp,"wb").write(buf.read())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 1) Download CSV
+            cmeta = next(f for f in csv_files if f["name"] == csv_name)
+            cbuf  = drive_db.download_file(cmeta["id"])
+            csvp  = os.path.join(tmpdir, csv_name)
+            with open(csvp, "wb") as cf:
+                cf.write(cbuf.read())
+            vgs.csv_file = csvp
             df = pd.read_csv(csvp)
 
-            # images json
-            images_data={}
-            if json_name!="(none)":
-                jm = next(f for f in jsons if f["name"]==json_name)
-                bj = drive_db.download_file(jm["id"])
-                jp = os.path.join(tmp,json_name)
-                open(jp,"wb").write(bj.read())
+            # 2) Download images JSON
+            images_data = {}
+            if json_name != "(none)":
+                jmeta = next(f for f in json_files if f["name"] == json_name)
+                jbuf  = drive_db.download_file(jmeta["id"])
+                jp    = os.path.join(tmpdir, json_name)
+                with open(jp, "wb") as jf:
+                    jf.write(jbuf.read())
+                vgs.images_json = jp
                 images_data = json.load(open(jp))
 
-            # patch
-            vgs.AUDIO_FOLDER=tmp; vgs.FONTS_FOLDER=tmp; vgs.LOGO_PATH=None
+            # 3) Download & unzip fonts
+            font_zips = list_drive("application/zip", fonts_id)
+            if font_zips:
+                zmeta = font_zips[0]
+                zbuf  = drive_db.download_file(zmeta["id"])
+                zpath = os.path.join(tmpdir, zmeta["name"])
+                with open(zpath, "wb") as zf:
+                    zf.write(zbuf.read())
+                with zipfile.ZipFile(zpath, "r") as zf:
+                    zf.extractall(os.path.join(tmpdir, "fonts"))
+                vgs.fonts_folder = os.path.join(tmpdir, "fonts")
+            else:
+                vgs.fonts_folder = tmpdir
 
-            # run
+            # 4) Download & process logo
+            logo_files = list_drive("image/", logo_id)
+            if logo_files:
+                lmeta     = logo_files[0]
+                lbuf      = drive_db.download_file(lmeta["id"])
+                logo_path = os.path.join(tmpdir, lmeta["name"])
+                with open(logo_path, "wb") as lf:
+                    lf.write(lbuf.read())
+
+                logo = Image.open(logo_path).convert("RGBA")
+                logo.thumbnail((150, 150))
+                logo.save(logo_path)
+
+                vgs.logo       = logo
+                vgs.logo_path  = logo_path
+                vgs.logo_width, vgs.logo_height = logo.size
+            else:
+                vgs.logo       = None
+                vgs.logo_path  = None
+                vgs.logo_width = vgs.logo_height = 0
+
+            # 5) Patch audio & output folders
+            vgs.audio_folder  = tmpdir
+            vgs.output_folder = tmpdir
+
+            # 6) Run batch
             create_videos_and_blogs_from_csv(
-                input_csv_file=csvp,
-                images_data=images_data,
-                products_df=df,
-                output_base_folder=tmp
+                input_csv_file     = csvp,
+                images_data        = images_data,
+                products_df        = df,
+                output_base_folder = tmpdir,
             )
 
-            # upload movies
-            ups=[]
-            for f in os.listdir(tmp):
-                if f.lower().endswith(".mp4"):
-                    data=open(os.path.join(tmp,f),"rb").read()
-                    drive_db.upload_file(f,data,"video/mp4",parent_id=OUTPUTS_ID)
-                    ups.append(f)
-            if ups:
-                st.success(f"Uploaded {len(ups)} videos")
+            # 7) Upload generated videos
+            uploaded = []
+            for fname in os.listdir(tmpdir):
+                if fname.lower().endswith(".mp4"):
+                    data = open(os.path.join(tmpdir, fname), "rb").read()
+                    drive_db.upload_file(
+                        name      = fname,
+                        data      = data,
+                        mime_type = "video/mp4",
+                        parent_id = outputs_id,
+                    )
+                    uploaded.append(fname)
+
+            if uploaded:
+                st.success(f"✅ Uploaded {len(uploaded)} videos")
             else:
-                st.error("No videos generated")
+                st.error("❌ No videos were generated.")

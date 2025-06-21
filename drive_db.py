@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
-DRIVE_FOLDER_ID = None  # will be set by app.py
+drive_folder_id = None  # This will be set by app.py
 
 def get_drive_service():
     sa_key = json.loads(st.secrets["drive_service_account"]["key"])
@@ -17,7 +17,7 @@ def get_drive_service():
 
 def list_files(mime_filter=None, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or DRIVE_FOLDER_ID
+    pid = parent_id or drive_folder_id
     q = f"'{pid}' in parents and trashed = false"
     if mime_filter:
         q += f" and mimeType contains '{mime_filter}'"
@@ -37,7 +37,7 @@ def download_file(file_id):
 
 def upload_file(name, data, mime_type, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or DRIVE_FOLDER_ID
+    pid = parent_id or drive_folder_id
     # see if exists
     existing = svc.files().list(
         q=f"name='{name}' and '{pid}' in parents",
@@ -52,7 +52,7 @@ def upload_file(name, data, mime_type, parent_id=None):
 
 def find_folder(name, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or DRIVE_FOLDER_ID
+    pid = parent_id or drive_folder_id
     q = (
         f"name='{name}' and mimeType='application/vnd.google-apps.folder' "
         f"and '{pid}' in parents and trashed=false"
@@ -63,7 +63,7 @@ def find_folder(name, parent_id=None):
 
 def create_folder(name, parent_id=None):
     svc = get_drive_service()
-    pid = parent_id or DRIVE_FOLDER_ID
+    pid = parent_id or drive_folder_id
     meta = {
         "name": name,
         "mimeType": "application/vnd.google-apps.folder",
