@@ -25,6 +25,8 @@ import streamlit as st
 import pandas as pd
 from PIL import Image
 
+import openai
+
 import drive_db
 import video_generation_service as vgs
 from video_generation_service import (
@@ -42,6 +44,8 @@ openai_api_key  = st.secrets["OPENAI_API_KEY"]
 drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 os.environ["OPENAI_API_KEY"] = openai_api_key
 drive_db.DRIVE_FOLDER_ID     = drive_folder_id
+openai.api_key = openai_api_key
+print(openai.Model.list()) 
 
 # ─── Ensure Drive sub‐folders ─────────────────────────────────────────────────
 inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id=drive_folder_id)
