@@ -11,4 +11,4 @@ pyngrok
 pillow
 gtts
 pydub
-openai
+openai==0.28.0
