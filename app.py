@@ -1,3 +1,21 @@
+# ─── Monkey‐patch requests.get to support local files ─────────────────────────
+import os
+import requests
+from requests.models import Response
+
+_orig_get = requests.get
+def _get_or_file(path, *args, **kwargs):
+    # If it's a local filesystem path, read it directly
+    if os.path.isfile(path):
+        r = Response()
+        r.status_code = 200
+        r._content   = open(path, "rb").read()
+        return r
+    # Otherwise delegate to normal HTTP behavior
+    return _orig_get(path, *args, **kwargs)
+
+requests.get = _get_or_file
+
 import os
 import json
 import zipfile
