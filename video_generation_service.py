@@ -45,6 +45,7 @@ def get_chatgpt_response(prompt):
         return response.choices[0].message['content'].strip()
     except Exception as e:
         return f"Error: {str(e)}"
+    raise
 
 def get_video_transcript(title, description):
     """
