@@ -11,3 +11,4 @@ pyngrok
 pillow
 gtts
 pydub
+openai
