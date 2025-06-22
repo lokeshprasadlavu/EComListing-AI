@@ -38,10 +38,10 @@ drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 
 # ─── Drive DB Initialization ─────────────────────────────────────────────────
 drive_db.DRIVE_FOLDER_ID = drive_folder_id
-inputs_id   = drive_db.find_or_create_folder("inputs", parent_id=drive_folder_id)
-outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)
-fonts_id    = drive_db.find_or_create_folder("fonts", parent_id=drive_folder_id)
-logo_id     = drive_db.find_or_create_folder("logo", parent_id=drive_folder_id)
+inputs_id   = drive_db.find_or_create_folder("inputs",   parent_id=drive_folder_id)
+outputs_id  = drive_db.find_or_create_folder("outputs",  parent_id=drive_folder_id)
+fonts_id    = drive_db.find_or_create_folder("fonts",    parent_id=drive_folder_id)
+logo_id     = drive_db.find_or_create_folder("logo",     parent_id=drive_folder_id)
 
 @st.cache_data
 def list_drive(mime_filter, parent_id):
@@ -104,26 +104,21 @@ if mode == "Single Product":
                 images = []
                 for up in uploaded_images:
                     p = os.path.join(tmpdir, up.name)
-                    open(p, "wb").write(up.getbuffer())
+                    with open(p, "wb") as f: f.write(up.getbuffer())
                     images.append({"imageURL": p})
 
                 vgs.audio_folder  = tmpdir
                 vgs.output_folder = tmpdir
 
-                # ─── REPLACED: invoke batch helper to write .mp4 + .txt files ───
-                df_single = pd.DataFrame([{
-                    "Listing Id":  listing_id,
-                    "Product Id":  product_id,
-                    "Title":       title,
-                    "Description": description
-                }])
-                create_videos_and_blogs_from_csv(
-                    input_csv_file     = None,
-                    images_data        = [],  # no JSON here
-                    products_df        = df_single,
-                    output_base_folder = tmpdir,
+                # only video generation
+                create_video_for_product(
+                    listing_id=listing_id,
+                    product_id=product_id,
+                    title=title,
+                    text=description,
+                    images=images,
+                    output_folder=tmpdir,
                 )
-                # ───────────────────────────────────────────────────────────────
 
                 folder = f"{listing_id}_{product_id}"
                 prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
@@ -137,11 +132,6 @@ if mode == "Single Product":
                 else:
                     st.error(f"Video {vid} missing")
 
-                for fn in os.listdir(tmpdir):
-                    if fn.startswith(folder) and fn.lower().endswith(".txt"):
-                        fp = os.path.join(tmpdir, fn)
-                        drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
-
 # ─── Batch from CSV ───────────────────────────────────────────────────────────
 else:
     st.header("Batch Video Generation from CSV")
@@ -154,7 +144,7 @@ else:
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 cp = os.path.join(tmpdir, up_csv.name)
-                open(cp, "wb").write(up_csv.getbuffer())
+                with open(cp, "wb") as f: f.write(up_csv.getbuffer())
                 df = pd.read_csv(cp)
                 cols = df.columns.str.strip().str.lower()
                 rm = {}
@@ -170,7 +160,7 @@ else:
                 images_data = []
                 if up_json:
                     jp = os.path.join(tmpdir, up_json.name)
-                    open(jp, "wb").write(up_json.getbuffer())
+                    with open(jp, "wb") as f: f.write(up_json.getbuffer())
                     images_data = json.load(open(jp))
 
                 for _, row in df.iterrows():
@@ -191,7 +181,7 @@ else:
                                 buf = requests.get(url).content
                                 fn  = os.path.basename(url)
                                 dst = os.path.join(tmpdir, fn)
-                                open(dst, "wb").write(buf)
+                                with open(dst, "wb") as f: f.write(buf)
                                 imgs.append({"imageURL": dst})
                     if not imgs:
                         st.warning(f"No images for {lid}; skipping.")
@@ -200,11 +190,11 @@ else:
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # ─── REPLACED: invoke batch helper to write .mp4 + .txt files ───
+                    # batch helper: video + blog text
                     create_videos_and_blogs_from_csv(
                         input_csv_file     = None,
                         images_data        = images_data,
-                        products_df        = pd.DataFrame([{
+                        products_df        = pd.DataFrame([{  # single-row
                             "Listing Id":  lid,
                             "Product Id":  pid,
                             "Title":       title,
@@ -212,7 +202,6 @@ else:
                         }]),
                         output_base_folder = tmpdir,
                     )
-                    # ───────────────────────────────────────────────────────────────
 
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
@@ -221,11 +210,12 @@ else:
                     vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
                         st.video(vp)
-                        drive_db.upload_file(vid, open(vp,"rb").read(), "video/mp4", prod_f)
+                        drive_db.upload_file(vid, open(vp, "rb").read(), "video/mp4", prod_f)
                     else:
                         st.warning(f"Video for {lid} missing")
 
+                    # upload both title + blog text
                     for fn in os.listdir(tmpdir):
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             fp = os.path.join(tmpdir, fn)
-                            drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_f)
+                            drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
