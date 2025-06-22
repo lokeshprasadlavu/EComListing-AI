@@ -180,7 +180,7 @@ else:
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title}...")
-                    prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
+                    
 
                     # Build images list
                     imgs = []
