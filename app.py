@@ -1,4 +1,3 @@
-# AI Video Generator App
 # ─── Monkey‐patch requests.get to support local files ─────────────────────────
 import os
 import requests
@@ -167,7 +166,7 @@ else:
     st.header("Batch Video Generation from CSV")
 
     uploaded_csv  = st.file_uploader("Upload Products CSV", type="csv")
-    uploaded_json = st.file_uploader("Upload Images JSON",     type="json")
+    uploaded_json = st.file_uploader("Upload Images JSON", type="json")
 
     if st.button("Run Batch"):
         if not uploaded_csv:
@@ -176,39 +175,54 @@ else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Load and normalize CSV
                 csv_path = os.path.join(tmpdir, uploaded_csv.name)
-                with open(csv_path,"wb") as f: f.write(uploaded_csv.getbuffer())
+                with open(csv_path, "wb") as f: f.write(uploaded_csv.getbuffer())
                 df = pd.read_csv(csv_path)
-                df.columns = [c.strip() for c in df.columns]
-                rename_map = {k:v for k,v in [("listing_id","Listing Id"),("product_id","Product Id"),("title","Title"),("description","Description")] if k in df.columns}
-                if rename_map: df = df.rename(columns=rename_map)
+                # Normalize column names and rename
+                orig = df.columns.tolist()
+                lows = [c.strip().lower() for c in orig]
+                rmap = {}
+                if "listing id" in lows:
+                    rmap[orig[lows.index("listing id")]] = "Listing Id"
+                if "product id" in lows:
+                    rmap[orig[lows.index("product id")]] = "Product Id"
+                if "title" in lows:
+                    rmap[orig[lows.index("title")]] = "Title"
+                if rmap:
+                    df = df.rename(columns=rmap)
+                st.write("DEBUG: final df columns:", df.columns.tolist())
 
-                # Load JSON list
+                # Load images JSON
                 images_data = []
                 if uploaded_json:
                     json_path = os.path.join(tmpdir, uploaded_json.name)
-                    with open(json_path,"wb") as f: f.write(uploaded_json.getbuffer())
+                    with open(json_path, "wb") as f: f.write(uploaded_json.getbuffer())
                     images_data = json.load(open(json_path))
 
                 # Loop through products
                 for _, row in df.iterrows():
-                    lid  = row.get("Listing Id")
-                    pid  = row.get("Product Id")
-                    title= row.get("Title")
+                    lid   = row.get("Listing Id")
+                    pid   = row.get("Product Id")
+                    title = row.get("Title")
 
-                    st.subheader(title)  # show title only
+                    st.subheader(title)
 
                     # Build images list
                     imgs = []
                     if isinstance(images_data, list):
-                        match = next((item for item in images_data if item.get("listingId")==lid), None)
+                        lid_str = str(lid)
+                        match = next(
+                            (item for item in images_data if str(item.get("listingId")) == lid_str),
+                            None
+                        )
+                        st.write(f"DEBUG for {lid_str}: JSON entry found? {bool(match)}")
                         if match:
-                            for imgobj in match.get("images",[]):
+                            for imgobj in match.get("images", []):
                                 url = imgobj.get("imageURL")
                                 if not url: continue
                                 resp = requests.get(url)
                                 fn   = os.path.basename(url)
                                 p    = os.path.join(tmpdir, fn)
-                                with open(p,"wb") as f: f.write(resp.content)
+                                with open(p, "wb") as f: f.write(resp.content)
                                 imgs.append({"imageURL": p})
 
                     if not imgs:
@@ -240,7 +254,7 @@ else:
                     video_path = os.path.join(tmpdir, video_file)
                     if os.path.exists(video_path):
                         st.video(video_path)
-                        drive_db.upload_file(video_file, open(video_path,"rb").read(), "video/mp4", prod_folder)
+                        drive_db.upload_file(video_file, open(video_path, "rb").read(), "video/mp4", prod_folder)
                     else:
                         st.warning(f"No video for {lid}")
 
@@ -248,4 +262,4 @@ else:
                     title_file = folder_name + "_title.txt"
                     tf = os.path.join(tmpdir, title_file)
                     if os.path.exists(tf):
-                        drive_db.upload_file(title_file, open(tf,"rb").read(), "text/plain", prod_folder)
+                        drive_db.upload_file(title_file, open(tf, "rb").read(), "text/plain", prod_folder)
