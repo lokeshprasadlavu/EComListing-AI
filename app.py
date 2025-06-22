@@ -147,7 +147,7 @@ else:
     up_json = st.file_uploader("Upload Images JSON", type="json")
 
     if st.button("Run Batch"):
-        if not all(up_csv, up_json):
+        if not all([up_csv, up_json]):
             st.error("Please upload a Products CSV & Images JSON.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
