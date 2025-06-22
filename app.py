@@ -151,24 +151,24 @@ else:
             st.error("Please upload a Products CSV & Images JSON.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Save & load CSV
+                # 1) Save & load CSV
                 csv_path = os.path.join(tmpdir, up_csv.name)
                 with open(csv_path, "wb") as f:
                     f.write(up_csv.getbuffer())
                 df = pd.read_csv(csv_path)
                 df.columns = [c.strip() for c in df.columns]
                 lower = [c.lower() for c in df.columns]
-                rename_map = {}
+                rm = {}
                 if "listing id" in lower:
-                    rename_map[df.columns[lower.index("listing id")]] = "Listing Id"
+                    rm[df.columns[lower.index("listing id")]] = "Listing Id"
                 if "product id" in lower:
-                    rename_map[df.columns[lower.index("product id")]] = "Product Id"
+                    rm[df.columns[lower.index("product id")]] = "Product Id"
                 if "title" in lower:
-                    rename_map[df.columns[lower.index("title")]] = "Title"
-                if rename_map:
-                    df = df.rename(columns=rename_map)
+                    rm[df.columns[lower.index("title")]] = "Title"
+                if rm:
+                    df = df.rename(columns=rm)
 
-                # Save & load JSON
+                # 2) Save & load JSON
                 images_data = []
                 if up_json:
                     json_path = os.path.join(tmpdir, up_json.name)
@@ -176,18 +176,17 @@ else:
                         f.write(up_json.getbuffer())
                     images_data = json.load(open(json_path))
 
-                # Iterate each product
+                # 3) Per‐product loop: generate & upload one at a time
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                    st.subheader(f"Generating {title}...")
-                    
+                    st.subheader(f"Generating {title} ({lid}/{pid})...")
 
-                    # Build images list
+                    # build images list for this product
                     imgs = []
                     if isinstance(images_data, list):
-                        entry = next((i for i in images_data 
-                                      if str(i.get("listingId")) == str(lid)), 
-                                      None
+                        entry = next(
+                            (i for i in images_data if str(i.get("listingId")) == str(lid)),
+                            None
                         )
                         if entry:
                             for obj in entry.get("images", []):
@@ -206,19 +205,25 @@ else:
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # Use batch helper per-product
+                    # 4) Generate just this product (video + title + blog)
+                    single_df = pd.DataFrame([{
+                        "Listing Id":  lid,
+                        "Product Id":  pid,
+                        "Title":       title,
+                        "Description": ""  # or pull from row if you have it
+                    }])
                     create_videos_and_blogs_from_csv(
-                        input_csv_file     = csv_path,
+                        input_csv_file     = None,
                         images_data        = images_data,
-                        products_df        = df,
+                        products_df        = single_df,
                         output_base_folder = tmpdir,
                     )
 
-                    # Preview & upload
+                    # 5) Preview & upload this product’s assets
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    # Video
+                    # video
                     vid = f"{folder}.mp4"
                     vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
@@ -227,8 +232,9 @@ else:
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # Title & Blog text
+                    # text files (title + blog)
                     for fn in os.listdir(tmpdir):
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             fp = os.path.join(tmpdir, fn)
                             drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
+
