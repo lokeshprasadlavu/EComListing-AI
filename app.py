@@ -240,7 +240,6 @@ else:
                     except Exception as e:
                         st.error(f"Failed to generate for {lid}/{pid}: {e}")
                         continue
-
                     # 1) Create a Drive folder for this product
                     folder_name = f"{lid}_{pid}"
                     prod_folder = drive_db.find_or_create_folder(folder_name, parent_id=outputs_id)
