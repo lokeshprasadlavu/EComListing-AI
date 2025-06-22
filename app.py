@@ -253,6 +253,12 @@ The JSON file can contain image URLs or paths for each product, structured as a 
                             with open(path, "wb") as f:
                                 f.write(buf.read())
                             imgs.append({"imageURL": path})
+                            # … after building imgs list but before skipping …
+                    st.write(f"DEBUG for Listing Id {lid}:")
+                    st.write("  images_data keys:", list(images_data.keys()))
+                    st.write("  raw entry:", images_data.get(lid))
+                    st.write("  imgs built:", imgs)
+
 
                     # ✋ Guard against zero-length images
                     if not imgs:
