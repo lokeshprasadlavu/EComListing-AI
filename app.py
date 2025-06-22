@@ -199,69 +199,86 @@ else:
     st.write("""Upload a CSV file with product details and optionally a JSON file with image URLs.
 The CSV should have columns like `listing_id`, `product_id`, `title`, and `description`.
 The JSON file can contain image URLs or paths for each product, structured as a dictionary with `listing_id` as keys and lists of image URLs as values.""")
-    uploaded_csv = st.file_uploader("Upload Products CSV", type="csv")
+
+    uploaded_csv  = st.file_uploader("Upload Products CSV", type="csv")
     uploaded_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
         if not uploaded_csv:
             st.error("Please upload a Products CSV to proceed.")
         else:
+            # Create a tmpdir once
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Save and load CSV
+                # — Save & load CSV —
                 csv_path = os.path.join(tmpdir, uploaded_csv.name)
-                with open(csv_path, "wb") as f:
-                    f.write(uploaded_csv.getbuffer())
-                vgs.csv_file = csv_path
+                with open(csv_path, "wb") as f: f.write(uploaded_csv.getbuffer())
                 df = pd.read_csv(csv_path)
-                # Normalize column names for backend
+                # normalize & rename as before…
                 df.columns = [c.strip() for c in df.columns]
                 rename_map = {}
-                if 'listing_id' in df.columns:
-                    rename_map['listing_id'] = 'Listing Id'
-                if 'product_id' in df.columns:
-                    rename_map['product_id'] = 'Product Id'
-                if 'title' in df.columns:
-                    rename_map['title'] = 'Title'
-                if 'description' in df.columns:
-                    rename_map['description'] = 'Description'
+                for k, v in [("listing_id","Listing Id"),
+                             ("product_id","Product Id"),
+                             ("title","Title"),
+                             ("description","Description")]:
+                    if k in df.columns:
+                        rename_map[k] = v
                 if rename_map:
                     df = df.rename(columns=rename_map)
-                st.write("DEBUG: renamed df columns", df.columns.tolist())
-                st.write("DEBUG: CSV head", df.head())
 
-                # Save and load JSON
+                # — Save & load images JSON if present —
                 images_data = {}
                 if uploaded_json:
                     json_path = os.path.join(tmpdir, uploaded_json.name)
-                    with open(json_path, "wb") as f:
-                        f.write(uploaded_json.getbuffer())
-                    vgs.images_json = json_path
+                    with open(json_path, "wb") as f: f.write(uploaded_json.getbuffer())
                     images_data = json.load(open(json_path))
-                    st.write("DEBUG: images_data", images_data)
 
-                # Patch audio and output
-                vgs.audio_folder = tmpdir
-                vgs.output_folder = tmpdir
-                st.write("DEBUG: audio_folder contents", os.listdir(vgs.audio_folder))
+                # Now loop per-product
+                for idx, row in df.iterrows():
+                    lid = row["Listing Id"]
+                    pid = row["Product Id"]
+                    title = row["Title"]
+                    desc  = row["Description"]
+                    st.subheader(f"{title}  —  [{lid}/{pid}]")
+                    st.write(desc)
 
-                # Run batch generation
-                try:
-                    create_videos_and_blogs_from_csv(
-                        input_csv_file=vgs.csv_file,
-                        images_data=images_data,
-                        products_df=df,
-                        output_base_folder=tmpdir,
-                    )
-                except Exception as e:
-                    st.error(f"❌ Batch generation failed: {e}")
-                    raise
+                    # Build images list for this product
+                    imgs = []
+                    if lid in images_data:
+                        for url in images_data[lid]:
+                            # download each into tmpdir
+                            fname = os.path.basename(url)
+                            buf   = drive_db.download_file(url) if url.startswith("drive://") else open(url,"rb")
+                            path  = os.path.join(tmpdir, fname)
+                            with open(path,"wb") as f: f.write(buf.read())
+                            imgs.append({"imageURL": path})
 
-                # Upload results
-                results = upload_videos_streamlit(
-                    tmpdir,
-                    drive_db.upload_file,
-                    lambda blog, url: blog + f"\n\nVideo at {url}"
-                )
-                for name, ok, msg in results:
-                    st.write(f"{name}: {'✅' if ok else '❌'} {msg}")
+                    # Patch globals
+                    vgs.csv_file      = csv_path
+                    vgs.images_json   = os.path.join(tmpdir, uploaded_json.name) if uploaded_json else None
+                    vgs.audio_folder  = tmpdir
+                    vgs.output_folder = tmpdir
 
+                    # Generate one video
+                    try:
+                        create_video_for_product(
+                            listing_id    = lid,
+                            product_id    = pid,
+                            title         = title,
+                            text          = desc,
+                            images        = imgs,
+                            output_folder = tmpdir,
+                        )
+                    except Exception as e:
+                        st.error(f"Failed to generate for {lid}/{pid}: {e}")
+                        continue
+
+                    # Find & preview/upload
+                    vid_name = f"{lid}_{pid}.mp4"
+                    vid_path = os.path.join(tmpdir, vid_name)
+                    if os.path.exists(vid_path):
+                        st.video(vid_path)
+                        data = open(vid_path, "rb").read()
+                        drive_db.upload_file(vid_name, data, "video/mp4", parent_id=outputs_id)
+                        st.success(f"Uploaded {vid_name}")
+                    else:
+                        st.error(f"No video found for {lid}/{pid}")
