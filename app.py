@@ -163,32 +163,29 @@ if mode == "Single Product":
 
 # ─── Batch from CSV Mode ─────────────────────────────────────────────────────
 else:
-    st.header("Batch Video Generation from CSV")
+    st.header("Batch Video & Blog Generation from CSV")
 
     uploaded_csv  = st.file_uploader("Upload Products CSV", type="csv")
-    uploaded_json = st.file_uploader("Upload Images JSON", type="json")
+    uploaded_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
         if not uploaded_csv:
             st.error("Please upload a Products CSV to proceed.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Load and normalize CSV
+                # Load CSV and rename columns as before…
                 csv_path = os.path.join(tmpdir, uploaded_csv.name)
                 with open(csv_path, "wb") as f: f.write(uploaded_csv.getbuffer())
                 df = pd.read_csv(csv_path)
-                # Normalize column names and rename
                 df.columns = [c.strip() for c in df.columns]
-                # rename lower → Title-cased headers
-                rename_map = {k:v for k,v in [
-                    ("listing_id","Listing Id"),
-                    ("product_id","Product Id"),
-                    ("title","Title"),
-                    ("description","Description"),
+                rename_map = {k: v for k, v in [
+                    ("listing_id",  "Listing Id"),
+                    ("product_id",  "Product Id"),
+                    ("title",       "Title"),
+                    ("description", "Description"),
                 ] if k in df.columns}
                 if rename_map:
                     df = df.rename(columns=rename_map)
-                st.write("DEBUG: final df columns:", df.columns.tolist())
 
                 # Load images JSON
                 images_data = []
@@ -197,23 +194,20 @@ else:
                     with open(json_path, "wb") as f: f.write(uploaded_json.getbuffer())
                     images_data = json.load(open(json_path))
 
-                # Loop through products
+                # Process each product
                 for _, row in df.iterrows():
-                    lid   = row.get("Listing Id")
-                    pid   = row.get("Product Id")
-                    title = row.get("Title")
+                    lid   = row["Listing Id"]
+                    pid   = row["Product Id"]
+                    title = row["Title"]
+                    desc  = row["Description"]
 
-                    st.subheader(title)
+                    st.subheader(f"{title} — [{lid}/{pid}]")
+                    st.write(desc)
 
-                    # Build images list
+                    # Build images list as before…
                     imgs = []
                     if isinstance(images_data, list):
-                        lid_str = str(lid)
-                        match = next(
-                            (item for item in images_data if str(item.get("listingId")) == lid_str),
-                            None
-                        )
-                        st.write(f"DEBUG for {lid_str}: JSON entry found? {bool(match)}")
+                        match = next((item for item in images_data if item.get("listingId")==lid), None)
                         if match:
                             for imgobj in match.get("images", []):
                                 url = imgobj.get("imageURL")
@@ -228,37 +222,50 @@ else:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # Patch folders
+                    # Patch and generate
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
-
-                    # Generate video & blog
                     try:
-                        create_videos_and_blogs_from_csv(
-                            input_csv_file     = csv_path,
-                            images_data        = images_data,
-                            products_df        = df,
-                            output_base_folder = tmpdir,
+                        create_video_for_product(
+                            listing_id    = lid,
+                            product_id    = pid,
+                            title         = title,
+                            text          = desc,
+                            images        = imgs,
+                            output_folder = tmpdir,
                         )
+                        # create_videos_and_blogs_from_csv will have also written out:
+                        #   * {lid}_{pid}.mp4
+                        #   * {lid}_{pid}_blog.txt
+                        #   * {lid}_{pid}_title.txt
                     except Exception as e:
-                        st.error(f"Failed {lid}/{pid}: {e}")
+                        st.error(f"Failed to generate for {lid}/{pid}: {e}")
                         continue
 
-                    # Create product folder
+                    # 1) Create a Drive folder for this product
                     folder_name = f"{lid}_{pid}"
                     prod_folder = drive_db.find_or_create_folder(folder_name, parent_id=outputs_id)
 
-                    # Preview & upload video
+                    # 2) Upload all files for this product
+                    for fname in os.listdir(tmpdir):
+                        if not fname.startswith(folder_name + "_"):
+                            continue
+                        path = os.path.join(tmpdir, fname)
+                        mime = "video/mp4" if fname.lower().endswith(".mp4") else "text/plain"
+                        with open(path, "rb") as f:
+                            data = f.read()
+                        drive_db.upload_file(
+                            name      = fname,
+                            data      = data,
+                            mime_type = mime,
+                            parent_id = prod_folder,
+                        )
+                        st.write(f"Uploaded `{fname}` to `{folder_name}`")
+
+                    # 3) Preview the video inline
                     video_file = f"{folder_name}.mp4"
                     video_path = os.path.join(tmpdir, video_file)
                     if os.path.exists(video_path):
                         st.video(video_path)
-                        drive_db.upload_file(video_file, open(video_path, "rb").read(), "video/mp4", prod_folder)
                     else:
-                        st.warning(f"No video for {lid}")
-
-                    # Upload title text
-                    title_file = folder_name + "_title.txt"
-                    tf = os.path.join(tmpdir, title_file)
-                    if os.path.exists(tf):
-                        drive_db.upload_file(title_file, open(tf, "rb").read(), "text/plain", prod_folder)
+                        st.warning(f"Couldn’t find `{video_file}` to preview.")
