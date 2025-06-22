@@ -101,36 +101,33 @@ if mode == "Single Product":
             st.error("Please fill all fields and upload at least one image.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Save images
                 images = []
                 for up in uploaded_images:
                     p = os.path.join(tmpdir, up.name)
                     open(p, "wb").write(up.getbuffer())
                     images.append({"imageURL": p})
 
-                # Patch folders
                 vgs.audio_folder  = tmpdir
                 vgs.output_folder = tmpdir
 
-                # Generate via backend (writes .mp4, _title.txt, _blog.txt)
-                try:
-                    create_video_for_product(
-                        listing_id=listing_id,
-                        product_id=product_id,
-                        title=title,
-                        text=description,
-                        images=images,
-                        output_folder=tmpdir,
-                    )
-                except Exception as e:
-                    st.error(f"Error during generation: {e}")
-                    st.stop()
+                # ─── REPLACED: invoke batch helper to write .mp4 + .txt files ───
+                df_single = pd.DataFrame([{
+                    "Listing Id":  listing_id,
+                    "Product Id":  product_id,
+                    "Title":       title,
+                    "Description": description
+                }])
+                create_videos_and_blogs_from_csv(
+                    input_csv_file     = None,
+                    images_data        = [],  # no JSON here
+                    products_df        = df_single,
+                    output_base_folder = tmpdir,
+                )
+                # ───────────────────────────────────────────────────────────────
 
-                # Create Drive subfolder
                 folder = f"{listing_id}_{product_id}"
                 prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                # Preview & upload the .mp4
                 vid = f"{folder}.mp4"
                 vp  = os.path.join(tmpdir, vid)
                 if os.path.exists(vp):
@@ -140,7 +137,6 @@ if mode == "Single Product":
                 else:
                     st.error(f"Video {vid} missing")
 
-                # --- Revised upload: pick up **all** .txt files (title + blog) ---
                 for fn in os.listdir(tmpdir):
                     if fn.startswith(folder) and fn.lower().endswith(".txt"):
                         fp = os.path.join(tmpdir, fn)
@@ -157,7 +153,6 @@ else:
             st.error("Please upload a Products CSV.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Load & normalize CSV
                 cp = os.path.join(tmpdir, up_csv.name)
                 open(cp, "wb").write(up_csv.getbuffer())
                 df = pd.read_csv(cp)
@@ -172,19 +167,16 @@ else:
                 if rm:
                     df = df.rename(columns=rm)
 
-                # Load images JSON
                 images_data = []
                 if up_json:
                     jp = os.path.join(tmpdir, up_json.name)
                     open(jp, "wb").write(up_json.getbuffer())
                     images_data = json.load(open(jp))
 
-                # Iterate each product
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title} ({lid}/{pid})...")
 
-                    # Build images list
                     imgs = []
                     if isinstance(images_data, list):
                         entry = next(
@@ -208,25 +200,23 @@ else:
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # Generate via backend (writes .mp4, _title.txt, _blog.txt)
-                    try:
-                        create_video_for_product(
-                            listing_id=lid,
-                            product_id=pid,
-                            title=title,
-                            text="",  # no description in batch
-                            images=imgs,
-                            output_folder=tmpdir,
-                        )
-                    except Exception as e:
-                        st.error(f"Error generating {lid}/{pid}: {e}")
-                        continue
+                    # ─── REPLACED: invoke batch helper to write .mp4 + .txt files ───
+                    create_videos_and_blogs_from_csv(
+                        input_csv_file     = None,
+                        images_data        = images_data,
+                        products_df        = pd.DataFrame([{
+                            "Listing Id":  lid,
+                            "Product Id":  pid,
+                            "Title":       title,
+                            "Description": ""
+                        }]),
+                        output_base_folder = tmpdir,
+                    )
+                    # ───────────────────────────────────────────────────────────────
 
-                    # Create Drive subfolder
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    # Preview & upload .mp4
                     vid = f"{folder}.mp4"
                     vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
@@ -235,8 +225,7 @@ else:
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # --- Revised upload: pick up **all** .txt files (title + blog) ---
                     for fn in os.listdir(tmpdir):
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             fp = os.path.join(tmpdir, fn)
-                            drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
+                            drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_f)
