@@ -81,6 +81,20 @@ else:
                     f.write(uploaded_csv.getbuffer())
                 vgs.csv_file = csv_path
                 df = pd.read_csv(csv_path)
+                # Normalize column names for backend
+                df.columns = [c.strip() for c in df.columns]
+                rename_map = {}
+                if 'listing_id' in df.columns:
+                    rename_map['listing_id'] = 'Listing Id'
+                if 'product_id' in df.columns:
+                    rename_map['product_id'] = 'Product Id'
+                if 'title' in df.columns:
+                    rename_map['title'] = 'Title'
+                if 'description' in df.columns:
+                    rename_map['description'] = 'Description'
+                if rename_map:
+                    df = df.rename(columns=rename_map)
+                st.write("DEBUG: renamed df columns", df.columns.tolist())
                 st.write("DEBUG: CSV head", df.head())
 
                 # Save and load JSON
