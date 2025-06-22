@@ -143,79 +143,64 @@ else:
             st.error("Please upload a Products CSV.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                cp = os.path.join(tmpdir, up_csv.name)
-                with open(cp, "wb") as f: f.write(up_csv.getbuffer())
-                df = pd.read_csv(cp)
-                cols = df.columns.str.strip().str.lower()
-                rm = {}
-                if "listing id" in cols:
-                    rm[df.columns[cols.get_loc("listing id")]] = "Listing Id"
-                if "product id" in cols:
-                    rm[df.columns[cols.get_loc("product id")]] = "Product Id"
-                if "title" in cols:
-                    rm[df.columns[cols.get_loc("title")]] = "Title"
-                if rm:
-                    df = df.rename(columns=rm)
+                # 1) Save and load CSV
+                csv_path = os.path.join(tmpdir, up_csv.name)
+                with open(csv_path, "wb") as f:
+                    f.write(up_csv.getbuffer())
+                df = pd.read_csv(csv_path)
+                # Normalize column names
+                df.columns = [c.strip() for c in df.columns]
+                lower = [c.lower() for c in df.columns]
+                rename_map = {}
+                if "listing id" in lower:
+                    rename_map[df.columns[lower.index("listing id")]] = "Listing Id"
+                if "product id" in lower:
+                    rename_map[df.columns[lower.index("product id")]] = "Product Id"
+                if "title" in lower:
+                    rename_map[df.columns[lower.index("title")]] = "Title"
+                if rename_map:
+                    df = df.rename(columns=rename_map)
 
+                # 2) Save and load JSON (if any)
                 images_data = []
                 if up_json:
-                    jp = os.path.join(tmpdir, up_json.name)
-                    with open(jp, "wb") as f: f.write(up_json.getbuffer())
-                    images_data = json.load(open(jp))
+                    json_path = os.path.join(tmpdir, up_json.name)
+                    with open(json_path, "wb") as f:
+                        f.write(up_json.getbuffer())
+                    images_data = json.load(open(json_path))
 
+                # ─── REPLACED: call the batch helper once for the entire CSV ────────
+                create_videos_and_blogs_from_csv(
+                    input_csv_file     = csv_path,
+                    images_data        = images_data,
+                    products_df        = df,
+                    output_base_folder = tmpdir,
+                )
+                # ─────────────────────────────────────────────────────────────────────
+
+                # 3) Now iterate through df rows to preview & upload each product
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                    st.subheader(f"Generating {title} ({lid}/{pid})...")
+                    folder_name = f"{lid}_{pid}"
+                    prod_folder = drive_db.find_or_create_folder(folder_name, parent_id=outputs_id)
 
-                    imgs = []
-                    if isinstance(images_data, list):
-                        entry = next(
-                            (i for i in images_data
-                             if str(i.get("listingId")) == str(lid)),
-                            None
-                        )
-                        if entry:
-                            for obj in entry.get("images", []):
-                                url = obj.get("imageURL")
-                                if not url: continue
-                                buf = requests.get(url).content
-                                fn  = os.path.basename(url)
-                                dst = os.path.join(tmpdir, fn)
-                                with open(dst, "wb") as f: f.write(buf)
-                                imgs.append({"imageURL": dst})
-                    if not imgs:
-                        st.warning(f"No images for {lid}; skipping.")
-                        continue
-
-                    vgs.audio_folder  = tmpdir
-                    vgs.output_folder = tmpdir
-
-                    # batch helper: video + blog text
-                    create_videos_and_blogs_from_csv(
-                        input_csv_file     = None,
-                        images_data        = images_data,
-                        products_df        = pd.DataFrame([{  # single-row
-                            "Listing Id":  lid,
-                            "Product Id":  pid,
-                            "Title":       title,
-                            "Description": ""
-                        }]),
-                        output_base_folder = tmpdir,
-                    )
-
-                    folder = f"{lid}_{pid}"
-                    prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
-
-                    vid = f"{folder}.mp4"
-                    vp  = os.path.join(tmpdir, vid)
+                    # Preview & upload video
+                    vp = os.path.join(tmpdir, f"{folder_name}.mp4")
                     if os.path.exists(vp):
+                        st.subheader(title)
                         st.video(vp)
-                        drive_db.upload_file(vid, open(vp, "rb").read(), "video/mp4", prod_f)
+                        drive_db.upload_file(f"{folder_name}.mp4",
+                                            open(vp,"rb").read(),
+                                            "video/mp4",
+                                            prod_folder)
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # upload both title + blog text
+                    # Upload text files (both title & blog)
                     for fn in os.listdir(tmpdir):
-                        if fn.startswith(folder) and fn.lower().endswith(".txt"):
+                        if fn.startswith(folder_name) and fn.lower().endswith(".txt"):
                             fp = os.path.join(tmpdir, fn)
-                            drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
+                            drive_db.upload_file(fn,
+                                                open(fp,"rb").read(),
+                                                "text/plain",
+                                                prod_folder)
