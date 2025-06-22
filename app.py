@@ -28,7 +28,7 @@ from PIL import Image
 
 import drive_db
 import video_generation_service as vgs
-from video_generation_service import create_videos_and_blogs_from_csv
+from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
 
 # ─── Page Config & Auth ──────────────────────────────────────────────────────
 st.set_page_config(page_title="AI Video Generator", layout="wide")
@@ -100,7 +100,7 @@ if mode == "Single Product":
         type=["png","jpg","jpeg"]
     )
 
-    if st.button("Generate Video & Blog"):
+    if st.button("Generate Video"):
         if not all([listing_id, product_id, title, description, uploaded_images]):
             st.error("Please fill all fields and upload at least one image.")
         else:
@@ -116,23 +116,14 @@ if mode == "Single Product":
                 vgs.audio_folder  = tmpdir
                 vgs.output_folder = tmpdir
 
-                # Use batch helper to generate video, title & blog
-                df_single = pd.DataFrame([{
-                    "Listing Id":  listing_id,
-                    "Product Id":  product_id,
-                    "Title":       title,
-                    "Description": description
-                }])
-                images_json = [{
-                    "listingId": listing_id,
-                    "productId": product_id,
-                    "images":    images
-                }]
-                create_videos_and_blogs_from_csv(
-                    input_csv_file     = None,
-                    images_data        = images_json,
-                    products_df        = df_single,
-                    output_base_folder = tmpdir,
+                # Generate the video
+                create_video_for_product(
+                    listing_id=listing_id,
+                    product_id=product_id,
+                    title=title,
+                    text=description,
+                    images=images,
+                    output_folder=tmpdir,
                 )
 
                 # Preview & upload
@@ -149,21 +140,15 @@ if mode == "Single Product":
                 else:
                     st.error(f"Video {vid} missing")
 
-                # Title & Blog text
-                for fn in os.listdir(tmpdir):
-                    if fn.startswith(folder) and fn.lower().endswith(".txt"):
-                        fp = os.path.join(tmpdir, fn)
-                        drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
-
 # ─── Batch from CSV ───────────────────────────────────────────────────────────
 else:
     st.header("Batch Video & Blog Generation from CSV")
     up_csv  = st.file_uploader("Upload Products CSV", type="csv")
-    up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
+    up_json = st.file_uploader("Upload Images JSON", type="json")
 
     if st.button("Run Batch"):
-        if not up_csv:
-            st.error("Please upload a Products CSV.")
+        if not all(up_csv, up_json):
+            st.error("Please upload a Products CSV & Images JSON.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Save & load CSV
@@ -194,12 +179,15 @@ else:
                 # Iterate each product
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                    st.subheader(f"Generating {title} ({lid}/{pid})...")
+                    st.subheader(f"Generating {title}...")
 
                     # Build images list
                     imgs = []
                     if isinstance(images_data, list):
-                        entry = next((i for i in images_data if str(i.get("listingId")) == str(lid)), None)
+                        entry = next((i for i in images_data 
+                                      if str(i.get("listingId")) == str(lid)), 
+                                      None
+                        )
                         if entry:
                             for obj in entry.get("images", []):
                                 url = obj.get("imageURL")
@@ -219,7 +207,7 @@ else:
 
                     # Use batch helper per-product
                     create_videos_and_blogs_from_csv(
-                        input_csv_file     = None,
+                        input_csv_file     = csv_path,
                         images_data        = images_data,
                         products_df        = pd.DataFrame([{
                             "Listing Id":  lid,
