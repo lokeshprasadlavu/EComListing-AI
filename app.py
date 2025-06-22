@@ -207,58 +207,62 @@ The JSON file can contain image URLs or paths for each product, structured as a 
         if not uploaded_csv:
             st.error("Please upload a Products CSV to proceed.")
         else:
-            # Create a tmpdir once
             with tempfile.TemporaryDirectory() as tmpdir:
-                # — Save & load CSV —
+                # --- Load and normalize CSV ---
                 csv_path = os.path.join(tmpdir, uploaded_csv.name)
-                with open(csv_path, "wb") as f: f.write(uploaded_csv.getbuffer())
+                with open(csv_path, "wb") as f:
+                    f.write(uploaded_csv.getbuffer())
                 df = pd.read_csv(csv_path)
-                # normalize & rename as before…
                 df.columns = [c.strip() for c in df.columns]
-                rename_map = {}
-                for k, v in [("listing_id","Listing Id"),
-                             ("product_id","Product Id"),
-                             ("title","Title"),
-                             ("description","Description")]:
-                    if k in df.columns:
-                        rename_map[k] = v
+                # rename lower → Title-cased headers
+                rename_map = {k:v for k,v in [
+                    ("listing_id","Listing Id"),
+                    ("product_id","Product Id"),
+                    ("title","Title"),
+                    ("description","Description"),
+                ] if k in df.columns}
                 if rename_map:
                     df = df.rename(columns=rename_map)
 
-                # — Save & load images JSON if present —
+                # --- Load images JSON if provided ---
                 images_data = {}
                 if uploaded_json:
                     json_path = os.path.join(tmpdir, uploaded_json.name)
-                    with open(json_path, "wb") as f: f.write(uploaded_json.getbuffer())
+                    with open(json_path, "wb") as f:
+                        f.write(uploaded_json.getbuffer())
                     images_data = json.load(open(json_path))
 
-                # Now loop per-product
-                for idx, row in df.iterrows():
-                    lid = row["Listing Id"]
-                    pid = row["Product Id"]
+                # Loop per product
+                for _, row in df.iterrows():
+                    lid  = row["Listing Id"]
+                    pid  = row["Product Id"]
                     title = row["Title"]
                     desc  = row["Description"]
+
                     st.subheader(f"{title}  —  [{lid}/{pid}]")
                     st.write(desc)
 
-                    # Build images list for this product
+                    # --- Build the images list ---
                     imgs = []
                     if lid in images_data:
                         for url in images_data[lid]:
-                            # download each into tmpdir
-                            fname = os.path.basename(url)
-                            buf   = drive_db.download_file(url) if url.startswith("drive://") else open(url,"rb")
-                            path  = os.path.join(tmpdir, fname)
-                            with open(path,"wb") as f: f.write(buf.read())
+                            # assume url is a Drive file ID
+                            buf  = drive_db.download_file(url)
+                            fname= f"{lid}_{os.path.basename(url)}"
+                            path = os.path.join(tmpdir, fname)
+                            with open(path, "wb") as f:
+                                f.write(buf.read())
                             imgs.append({"imageURL": path})
 
-                    # Patch globals
-                    vgs.csv_file      = csv_path
-                    vgs.images_json   = os.path.join(tmpdir, uploaded_json.name) if uploaded_json else None
+                    # ✋ Guard against zero-length images
+                    if not imgs:
+                        st.warning(f"No images found for {lid}; skipping.")
+                        continue
+
+                    # --- Patch globals & generate ---
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # Generate one video
                     try:
                         create_video_for_product(
                             listing_id    = lid,
@@ -272,13 +276,13 @@ The JSON file can contain image URLs or paths for each product, structured as a 
                         st.error(f"Failed to generate for {lid}/{pid}: {e}")
                         continue
 
-                    # Find & preview/upload
-                    vid_name = f"{lid}_{pid}.mp4"
-                    vid_path = os.path.join(tmpdir, vid_name)
-                    if os.path.exists(vid_path):
-                        st.video(vid_path)
-                        data = open(vid_path, "rb").read()
-                        drive_db.upload_file(vid_name, data, "video/mp4", parent_id=outputs_id)
-                        st.success(f"Uploaded {vid_name}")
+                    # --- Preview & upload ---
+                    video_name = f"{lid}_{pid}.mp4"
+                    video_path = os.path.join(tmpdir, video_name)
+                    if os.path.exists(video_path):
+                        st.video(video_path)
+                        data = open(video_path, "rb").read()
+                        drive_db.upload_file(video_name, data, "video/mp4", parent_id=outputs_id)
+                        st.success(f"Uploaded {video_name}")
                     else:
-                        st.error(f"No video found for {lid}/{pid}")
+                        st.error(f"No video file found for {lid}/{pid}")
