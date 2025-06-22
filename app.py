@@ -134,11 +134,10 @@ if mode == "Single Product":
                 else:
                     st.error(f"Video {vid} missing")
 
-                # Upload title and blog
-                for suf in ("_title.txt","_blog.txt"):
-                    fn = f"{folder}{suf}"
-                    fp = os.path.join(tmpdir, fn)
-                    if os.path.exists(fp):
+                # --- Revised upload: pick up any .txt files generated ---
+                for fn in os.listdir(tmpdir):
+                    if fn.startswith(folder) and fn.lower().endswith(".txt"):
+                        fp = os.path.join(tmpdir, fn)
                         drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_f)
 
 # ─── Batch from CSV ───────────────────────────────────────────────────────────
@@ -151,7 +150,6 @@ else:
             st.error("Please upload a Products CSV.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # load & normalize CSV
                 cp = os.path.join(tmpdir, up_csv.name)
                 open(cp,"wb").write(up_csv.getbuffer())
                 df = pd.read_csv(cp)
@@ -166,19 +164,16 @@ else:
                 if rm:
                     df = df.rename(columns=rm)
 
-                # load JSON
                 images_data = []
                 if up_json:
                     jp = os.path.join(tmpdir, up_json.name)
                     open(jp,"wb").write(up_json.getbuffer())
                     images_data = json.load(open(jp))
 
-                # per-product loop
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title} ({lid}/{pid})...")
 
-                    # build images
                     imgs = []
                     if isinstance(images_data, list):
                         entry = next((i for i in images_data
@@ -192,7 +187,6 @@ else:
                                 dst = os.path.join(tmpdir, fn)
                                 open(dst,"wb").write(buf)
                                 imgs.append({"imageURL": dst})
-
                     if not imgs:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
@@ -216,7 +210,6 @@ else:
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    # preview & upload video
                     vid = f"{folder}.mp4"
                     vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
@@ -225,16 +218,8 @@ else:
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # upload title text
-                    tf = f"{folder}_title.txt"
-                    tp = os.path.join(tmpdir, tf)
-                    if os.path.exists(tp):
-                        drive_db.upload_file(tf, open(tp,"rb").read(), "text/plain", prod_f)
-
-                    # upload blog text
-                    bf = f"{folder}_blog.txt"
-                    bp = os.path.join(tmpdir, bf)
-                    if os.path.exists(bp):
-                        drive_db.upload_file(bf, open(bp,"rb").read(), "text/plain", prod_f)
-                    else:
-                        st.warning(f"Blog text for {lid} missing")
+                    # --- Revised upload: pick up any .txt files generated ---
+                    for fn in os.listdir(tmpdir):
+                        if fn.startswith(folder) and fn.lower().endswith(".txt"):
+                            fp = os.path.join(tmpdir, fn)
+                            drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_f)
