@@ -11,6 +11,7 @@ def _get_or_file(path, *args, **kwargs):
         r._content = open(path, "rb").read()
         return r
     return _orig_get(path, *args, **kwargs)
+
 requests.get = _get_or_file
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,7 +26,10 @@ from PIL import Image
 
 import drive_db
 import video_generation_service as vgs
-from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
+from video_generation_service import (
+    create_video_for_product,
+    create_videos_and_blogs_from_csv,
+)
 
 # ─── Page Config & Auth ──────────────────────────────────────────────────────
 st.set_page_config(page_title="AI Video Generator", layout="wide")
@@ -36,12 +40,12 @@ openai.api_key = st.secrets["OPENAI_API_KEY"]
 os.environ["OPENAI_API_KEY"] = openai.api_key
 drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 
-# ─── Drive DB Initialization ─────────────────────────────────────────────────
+# ─── Drive DB Init ───────────────────────────────────────────────────────────
 drive_db.DRIVE_FOLDER_ID = drive_folder_id
-inputs_id   = drive_db.find_or_create_folder("inputs",   parent_id=drive_folder_id)
-outputs_id  = drive_db.find_or_create_folder("outputs",  parent_id=drive_folder_id)
-fonts_id    = drive_db.find_or_create_folder("fonts",    parent_id=drive_folder_id)
-logo_id     = drive_db.find_or_create_folder("logo",     parent_id=drive_folder_id)
+inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id=drive_folder_id)
+outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)
+fonts_id    = drive_db.find_or_create_folder("fonts",   parent_id=drive_folder_id)
+logo_id     = drive_db.find_or_create_folder("logo",    parent_id=drive_folder_id)
 
 @st.cache_data
 def list_drive(mime_filter, parent_id):
@@ -54,7 +58,7 @@ def preload_fonts(fonts_folder_id):
     zips = [f for f in files if f["name"].lower().endswith(".zip")]
     if zips:
         buf = drive_db.download_file(zips[0]["id"])
-        zp = os.path.join(wd, zips[0]["name"])
+        zp  = os.path.join(wd, zips[0]["name"])
         open(zp, "wb").write(buf.read())
         ext = os.path.join(wd, "fonts")
         os.makedirs(ext, exist_ok=True)
@@ -78,13 +82,13 @@ def preload_logo(logo_folder_id):
     return img, lp, img.size[0], img.size[1]
 
 # ─── Preload assets ──────────────────────────────────────────────────────────
-vgs.fonts_folder = preload_fonts(fonts_id)
+vgs.fonts_folder   = preload_fonts(fonts_id)
 vgs.logo, vgs.logo_path, vgs.logo_width, vgs.logo_height = preload_logo(logo_id)
 
 # ─── Mode selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch from CSV"])
 
-# ─── Single Product ──────────────────────────────────────────────────────────
+# ─── Single Product (unchanged) ──────────────────────────────────────────────
 if mode == "Single Product":
     st.header("Single Product Video Generation")
     listing_id  = st.text_input("Listing ID")
@@ -96,6 +100,7 @@ if mode == "Single Product":
         accept_multiple_files=True,
         type=["png","jpg","jpeg"]
     )
+
     if st.button("Generate Video"):
         if not all([listing_id, product_id, title, description, uploaded_images]):
             st.error("Please fill all fields and upload at least one image.")
@@ -110,7 +115,6 @@ if mode == "Single Product":
                 vgs.audio_folder  = tmpdir
                 vgs.output_folder = tmpdir
 
-                # only video generation
                 create_video_for_product(
                     listing_id=listing_id,
                     product_id=product_id,
@@ -128,14 +132,14 @@ if mode == "Single Product":
                 if os.path.exists(vp):
                     st.subheader(title)
                     st.video(vp)
-                    drive_db.upload_file(vid, open(vp, "rb").read(), "video/mp4", prod_f)
+                    drive_db.upload_file(vid, open(vp,"rb").read(), "video/mp4", prod_f)
                 else:
                     st.error(f"Video {vid} missing")
 
-# ─── Batch from CSV ───────────────────────────────────────────────────────────
+# ─── Batch from CSV (per-product via batch helper) ───────────────────────────
 else:
     st.header("Batch Video Generation from CSV")
-    up_csv  = st.file_uploader("Upload Products CSV", type="csv")
+    up_csv  = st.file_uploader("Upload Products CSV",           type="csv")
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
@@ -143,64 +147,87 @@ else:
             st.error("Please upload a Products CSV.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # 1) Save and load CSV
+                # 1) Save & load CSV, normalize columns
                 csv_path = os.path.join(tmpdir, up_csv.name)
-                with open(csv_path, "wb") as f:
-                    f.write(up_csv.getbuffer())
+                with open(csv_path, "wb") as f: f.write(up_csv.getbuffer())
                 df = pd.read_csv(csv_path)
-                # Normalize column names
                 df.columns = [c.strip() for c in df.columns]
                 lower = [c.lower() for c in df.columns]
-                rename_map = {}
+                rm = {}
                 if "listing id" in lower:
-                    rename_map[df.columns[lower.index("listing id")]] = "Listing Id"
+                    rm[df.columns[lower.index("listing id")]] = "Listing Id"
                 if "product id" in lower:
-                    rename_map[df.columns[lower.index("product id")]] = "Product Id"
+                    rm[df.columns[lower.index("product id")]] = "Product Id"
                 if "title" in lower:
-                    rename_map[df.columns[lower.index("title")]] = "Title"
-                if rename_map:
-                    df = df.rename(columns=rename_map)
+                    rm[df.columns[lower.index("title")]] = "Title"
+                if rm:
+                    df = df.rename(columns=rm)
 
-                # 2) Save and load JSON (if any)
+                # 2) Save & load JSON
                 images_data = []
                 if up_json:
                     json_path = os.path.join(tmpdir, up_json.name)
-                    with open(json_path, "wb") as f:
-                        f.write(up_json.getbuffer())
+                    with open(json_path, "wb") as f: f.write(up_json.getbuffer())
                     images_data = json.load(open(json_path))
 
-                # ─── REPLACED: call the batch helper once for the entire CSV ────────
-                create_videos_and_blogs_from_csv(
-                    input_csv_file     = csv_path,
-                    images_data        = images_data,
-                    products_df        = df,
-                    output_base_folder = tmpdir,
-                )
-                # ─────────────────────────────────────────────────────────────────────
-
-                # 3) Now iterate through df rows to preview & upload each product
+                # 3) Per-item generate (video + blog) via batch helper
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                    folder_name = f"{lid}_{pid}"
-                    prod_folder = drive_db.find_or_create_folder(folder_name, parent_id=outputs_id)
+                    st.subheader(f"Generating {title} ({lid}/{pid})...")
 
-                    # Preview & upload video
-                    vp = os.path.join(tmpdir, f"{folder_name}.mp4")
+                    # Download images list
+                    imgs = []
+                    if isinstance(images_data, list):
+                        entry = next(
+                            (i for i in images_data 
+                             if str(i.get("listingId")) == str(lid)),
+                            None
+                        )
+                        if entry:
+                            for obj in entry.get("images", []):
+                                url = obj.get("imageURL")
+                                if not url: continue
+                                data = requests.get(url).content
+                                fn   = os.path.basename(url)
+                                dst  = os.path.join(tmpdir, fn)
+                                with open(dst, "wb") as f: f.write(data)
+                                imgs.append({"imageURL": dst})
+
+                    if not imgs:
+                        st.warning(f"No images for {lid}; skipping.")
+                        continue
+
+                    vgs.audio_folder  = tmpdir
+                    vgs.output_folder = tmpdir
+
+                    # **Batch helper** writes .mp4, _title.txt & _blog.txt
+                    create_videos_and_blogs_from_csv(
+                        input_csv_file     = None,
+                        images_data        = images_data,
+                        products_df        = pd.DataFrame([{
+                            "Listing Id":  lid,
+                            "Product Id":  pid,
+                            "Title":       title,
+                            "Description": ""
+                        }]),
+                        output_base_folder = tmpdir,
+                    )
+
+                    # 4) Preview & upload
+                    folder = f"{lid}_{pid}"
+                    prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
+
+                    # Video
+                    vid = f"{folder}.mp4"
+                    vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
-                        st.subheader(title)
                         st.video(vp)
-                        drive_db.upload_file(f"{folder_name}.mp4",
-                                            open(vp,"rb").read(),
-                                            "video/mp4",
-                                            prod_folder)
+                        drive_db.upload_file(vid, open(vp,"rb").read(), "video/mp4", prod_f)
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # Upload text files (both title & blog)
+                    # Both text files (title + blog)
                     for fn in os.listdir(tmpdir):
-                        if fn.startswith(folder_name) and fn.lower().endswith(".txt"):
-                            fp = os.path.join(tmpdir, fn)
-                            drive_db.upload_file(fn,
-                                                open(fp,"rb").read(),
-                                                "text/plain",
-                                                prod_folder)
+                        if fn.startswith(folder) and fn.lower().endswith(".txt"):
+                            path = os.path.join(tmpdir, fn)
+                            drive_db.upload_file(fn, open(path,"rb").read(), "text/plain", prod_f)
