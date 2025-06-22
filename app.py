@@ -151,7 +151,7 @@ if mode == "Single Product":
                     if os.path.exists(fp):
                         drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_f)
 
-# ─── BATCH MODE (per-product streaming + upload) ─────────────────────────────
+# ─── BATCH MODE (per-product streaming + upload) ───────────────────────────
 else:
     st.header("Batch Video Generation from CSV")
 
@@ -168,7 +168,7 @@ else:
                 open(cp, "wb").write(up_csv.getbuffer())
                 df = pd.read_csv(cp)
                 cols = df.columns.str.strip().str.lower()
-                rm   = {}
+                rm = {}
                 if "listing id" in cols:
                     rm[df.columns[cols.get_loc("listing id")]] = "Listing Id"
                 if "product id" in cols:
@@ -187,28 +187,32 @@ else:
 
                 # Iterate each product
                 for _, row in df.iterrows():
-                    lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                    st.subheader(title)
+                    lid   = row["Listing Id"]
+                    pid   = row["Product Id"]
+                    title = row["Title"]
 
-                    # Build images
+                    st.subheader(f"Generating {title} ({lid}/{pid})... ")
+
+                    # Build images list
                     imgs = []
                     if isinstance(images_data, list):
-                        entry = next((i for i in images_data 
-                                      if str(i.get("listingId"))==str(lid)), None)
+                        entry = next((i for i in images_data if str(i.get("listingId")) == str(lid)), None)
                         if entry:
                             for obj in entry.get("images", []):
                                 url = obj.get("imageURL")
-                                if not url: continue
-                                buff = requests.get(url).content
-                                fn   = os.path.basename(url)
-                                dst  = os.path.join(tmpdir, fn)
-                                open(dst, "wb").write(buff)
+                                if not url:
+                                    continue
+                                buf = requests.get(url).content
+                                fn  = os.path.basename(url)
+                                dst = os.path.join(tmpdir, fn)
+                                open(dst, "wb").write(buf)
                                 imgs.append({"imageURL": dst})
+
                     if not imgs:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # Generate per-product
+                    # Patch globals and generate per-product
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
                     try:
@@ -216,26 +220,29 @@ else:
                             listing_id    = lid,
                             product_id    = pid,
                             title         = title,
-                            text          = "",
+                            text          = "",  # no description in batch
                             images        = imgs,
                             output_folder = tmpdir,
                         )
                     except Exception as e:
-                        st.error(f"Error {lid}/{pid}: {e}")
+                        st.error(f"Error generating {lid}/{pid}: {e}")
                         continue
 
-                    # Upload & preview
+                    # Prepare Drive folder
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
-                    vid    = f"{folder}.mp4"
-                    vp     = os.path.join(tmpdir, vid)
+
+                    # Preview & upload the video
+                    vid = f"{folder}.mp4"
+                    vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
                         st.video(vp)
                         drive_db.upload_file(vid, open(vp, "rb").read(), "video/mp4", prod_f)
                     else:
-                        st.warning(f"Video for {lid} missing")
-                    # Title text
+                        st.error(f"Video {vid} missing for {lid}")
+
+                    # Upload title text
                     tf = f"{folder}_title.txt"
                     tp = os.path.join(tmpdir, tf)
                     if os.path.exists(tp):
-                        drive_db.upload_file(tf, open(tp,"rb").read(), "text/plain", prod_f)
+                        drive_db.upload_file(tf, open(tp, "rb").read(), "text/plain", prod_f)
