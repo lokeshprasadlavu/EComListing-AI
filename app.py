@@ -47,10 +47,11 @@ drive_db.DRIVE_FOLDER_ID     = drive_folder_id
 openai.api_key = openai_api_key
 
 # ─── Ensure Drive sub‐folders ─────────────────────────────────────────────────
-inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id=drive_folder_id)
-outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)
-fonts_id    = drive_db.find_or_create_folder("fonts",   parent_id=drive_folder_id)
-logo_id     = drive_db.find_or_create_folder("logo",    parent_id=drive_folder_id)
+parent_id = drive_folder_id
+inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id)
+outputs_id  = drive_db.find_or_create_folder("outputs", parent_id)
+fonts_id    = drive_db.find_or_create_folder("fonts",   parent_id)
+logo_id     = drive_db.find_or_create_folder("logo",    parent_id)
 
 @st.cache_data
 def list_drive(mime_filter, parent_id):
@@ -263,3 +264,4 @@ The JSON file can contain image URLs or paths for each product, structured as a 
                 )
                 for name, ok, msg in results:
                     st.write(f"{name}: {'✅' if ok else '❌'} {msg}")
+
