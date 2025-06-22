@@ -178,17 +178,16 @@ else:
                 with open(csv_path, "wb") as f: f.write(uploaded_csv.getbuffer())
                 df = pd.read_csv(csv_path)
                 # Normalize column names and rename
-                orig = df.columns.tolist()
-                lows = [c.strip().lower() for c in orig]
-                rmap = {}
-                if "listing id" in lows:
-                    rmap[orig[lows.index("listing id")]] = "Listing Id"
-                if "product id" in lows:
-                    rmap[orig[lows.index("product id")]] = "Product Id"
-                if "title" in lows:
-                    rmap[orig[lows.index("title")]] = "Title"
-                if rmap:
-                    df = df.rename(columns=rmap)
+                df.columns = [c.strip() for c in df.columns]
+                # rename lower → Title-cased headers
+                rename_map = {k:v for k,v in [
+                    ("listing_id","Listing Id"),
+                    ("product_id","Product Id"),
+                    ("title","Title"),
+                    ("description","Description"),
+                ] if k in df.columns}
+                if rename_map:
+                    df = df.rename(columns=rename_map)
                 st.write("DEBUG: final df columns:", df.columns.tolist())
 
                 # Load images JSON
