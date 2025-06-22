@@ -202,7 +202,6 @@ else:
                     desc  = row["Description"]
 
                     st.subheader(f"{title} — [{lid}/{pid}]")
-                    st.write(desc)
 
                     # Build images list as before…
                     imgs = []
