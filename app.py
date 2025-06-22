@@ -176,62 +176,31 @@ else:
                         f.write(up_json.getbuffer())
                     images_data = json.load(open(json_path))
 
-                # Iterate each product
+                # Run batch helper once to generate videos + text
+                create_videos_and_blogs_from_csv(
+                    input_csv_file     = csv_path,
+                    images_data        = images_data,
+                    products_df        = df,
+                    output_base_folder = tmpdir,
+                )
+
+                # Iterate each row to preview & upload
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                    st.subheader(f"Generating {title}...")
-
-                    # Build images list
-                    imgs = []
-                    if isinstance(images_data, list):
-                        entry = next((i for i in images_data 
-                                      if str(i.get("listingId")) == str(lid)), 
-                                      None
-                        )
-                        if entry:
-                            for obj in entry.get("images", []):
-                                url = obj.get("imageURL")
-                                if not url: continue
-                                data = requests.get(url).content
-                                fn   = os.path.basename(url)
-                                dst  = os.path.join(tmpdir, fn)
-                                with open(dst, "wb") as f:
-                                    f.write(data)
-                                imgs.append({"imageURL": dst})
-                    if not imgs:
-                        st.warning(f"No images for {lid}; skipping.")
-                        continue
-
-                    vgs.audio_folder  = tmpdir
-                    vgs.output_folder = tmpdir
-
-                    # Use batch helper per-product
-                    create_videos_and_blogs_from_csv(
-                        input_csv_file     = csv_path,
-                        images_data        = images_data,
-                        products_df        = pd.DataFrame([{
-                            "Listing Id":  lid,
-                            "Product Id":  pid,
-                            "Title":       title,
-                            "Description": ""
-                        }]),
-                        output_base_folder = tmpdir,
-                    )
-
-                    # Preview & upload
                     folder = f"{lid}_{pid}"
+                    st.subheader(f"{title} ({lid}/{pid})")
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    # Video
-                    vid = f"{folder}.mp4"
-                    vp  = os.path.join(tmpdir, vid)
-                    if os.path.exists(vp):
-                        st.video(vp)
-                        drive_db.upload_file(vid, open(vp, "rb").read(), "video/mp4", prod_f)
+                    # Upload & preview video
+                    video_file = f"{folder}.mp4"
+                    video_path = os.path.join(tmpdir, video_file)
+                    if os.path.exists(video_path):
+                        st.video(video_path)
+                        drive_db.upload_file(video_file, open(video_path, "rb").read(), "video/mp4", prod_f)
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # Title & Blog text
+                    # Upload title & blog text
                     for fn in os.listdir(tmpdir):
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             fp = os.path.join(tmpdir, fn)
