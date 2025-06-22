@@ -91,7 +91,7 @@ else:
                         f.write(uploaded_json.getbuffer())
                     vgs.images_json = json_path
                     images_data = json.load(open(json_path))
-                    st.write("DEBUG: images_data keys", list(images_data.keys()))
+                    st.write("DEBUG: images_data", images_data)
 
                 # Patch audio and output
                 vgs.audio_folder = tmpdir
