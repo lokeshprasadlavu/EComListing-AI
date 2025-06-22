@@ -4,6 +4,7 @@ import requests
 from requests.models import Response
 
 _orig_get = requests.get
+
 def _get_or_file(path, *args, **kwargs):
     if os.path.isfile(path):
         r = Response()
@@ -11,12 +12,13 @@ def _get_or_file(path, *args, **kwargs):
         r._content = open(path, "rb").read()
         return r
     return _orig_get(path, *args, **kwargs)
+
 requests.get = _get_or_file
 # ─────────────────────────────────────────────────────────────────────────────
 
 import json
-import zipfile
 import tempfile
+import zipfile
 
 import streamlit as st
 import pandas as pd
@@ -27,7 +29,6 @@ import drive_db
 import video_generation_service as vgs
 from video_generation_service import (
     create_video_for_product,
-    create_videos_and_blogs_from_csv,
 )
 
 # ─── Page Config & Auth ──────────────────────────────────────────────────────
@@ -35,39 +36,41 @@ st.set_page_config(page_title="AI Video Generator", layout="wide")
 st.title("📹 AI Video Generator")
 
 # ─── Secrets & OpenAI Setup ──────────────────────────────────────────────────
-openai.api_key       = st.secrets["OPENAI_API_KEY"]
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 os.environ["OPENAI_API_KEY"] = openai.api_key
-drive_folder_id      = st.secrets["DRIVE_FOLDER_ID"]
 
 # ─── Drive DB Initialization ─────────────────────────────────────────────────
+drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 drive_db.DRIVE_FOLDER_ID = drive_folder_id
-def get_folder(name):
-    return drive_db.find_or_create_folder(name, parent_id=drive_folder_id)
-inputs_id   = get_folder("inputs")
-outputs_id  = get_folder("outputs")
-fonts_id    = get_folder("fonts")
-logo_id     = get_folder("logo")
+inputs_id   = drive_db.find_or_create_folder("inputs", parent_id=drive_folder_id)
+outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)
+fonts_id    = drive_db.find_or_create_folder("fonts", parent_id=drive_folder_id)
+logo_id     = drive_db.find_or_create_folder("logo", parent_id=drive_folder_id)
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
 @st.cache_data
 def list_drive(mime_filter, parent_id):
     return drive_db.list_files(mime_filter=mime_filter, parent_id=parent_id)
 
+# ─── Preload & Unzip Fonts Once ───────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def preload_fonts(fonts_folder_id):
     workdir = tempfile.mkdtemp()
-    files   = drive_db.list_files(None, parent_id=fonts_folder_id)
-    zips    = [f for f in files if f["name"].lower().endswith(".zip")]
+    files = drive_db.list_files(None, parent_id=fonts_folder_id)
+    zips  = [f for f in files if f["name"].lower().endswith(".zip")]
     if zips:
-        buf = drive_db.download_file(zips[0]["id"])
-        zp  = os.path.join(workdir, zips[0]["name"])
+        buf  = drive_db.download_file(zips[0]["id"])
+        zp   = os.path.join(workdir, zips[0]["name"])
         open(zp, "wb").write(buf.read())
         extract_dir = os.path.join(workdir, "fonts")
         os.makedirs(extract_dir, exist_ok=True)
-        zipfile.ZipFile(zp).extractall(extract_dir)
+        with zipfile.ZipFile(zp, "r") as zf:
+            zf.extractall(extract_dir)
         return extract_dir
     return workdir
 
+vgs.fonts_folder = preload_fonts(fonts_id)
+
+# ─── Preload & Process Logo Once ─────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def preload_logo(logo_folder_id):
     files = drive_db.list_files("image/", parent_id=logo_folder_id)
@@ -82,8 +85,6 @@ def preload_logo(logo_folder_id):
     img.save(lp)
     return img, lp, img.size[0], img.size[1]
 
-# ─── Preload Assets ──────────────────────────────────────────────────────────
-vgs.fonts_folder   = preload_fonts(fonts_id)
 vgs.logo, vgs.logo_path, vgs.logo_width, vgs.logo_height = preload_logo(logo_id)
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ if mode == "Single Product":
 
     if st.button("Generate Video"):
         if not (listing_id and product_id and title and description and uploaded_images):
-            st.error("Fill all fields and upload ≥1 image.")
+            st.error("Please fill all fields and upload ≥1 image.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Save images
@@ -130,117 +131,111 @@ if mode == "Single Product":
                     st.error(f"Generation error: {e}")
                     st.stop()
 
-                # Output folder & upload
-                folder_name = f"{listing_id}_{product_id}"
-                prod_folder = drive_db.find_or_create_folder(folder_name, parent_id=outputs_id)
+                # Upload & preview
+                folder = f"{listing_id}_{product_id}"
+                prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                # Preview & upload video
-                vid = f"{folder_name}.mp4"
+                vid = f"{folder}.mp4"
                 vp  = os.path.join(tmpdir, vid)
                 if os.path.exists(vp):
                     st.subheader(title)
                     st.video(vp)
-                    drive_db.upload_file(vid, open(vp,"rb").read(), "video/mp4", prod_folder)
+                    drive_db.upload_file(vid, open(vp,"rb").read(), "video/mp4", prod_f)
                 else:
                     st.error(f"Video {vid} missing")
 
-                # Upload title & blog text
+                # Title & blog
                 for suf in ["_title.txt","_blog.txt"]:
-                    fn = f"{folder_name}{suf}"
+                    fn = f"{folder}{suf}"
                     fp = os.path.join(tmpdir, fn)
                     if os.path.exists(fp):
-                        drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_folder)
+                        drive_db.upload_file(fn, open(fp,"rb").read(), "text/plain", prod_f)
 
-# ─── BATCH FROM CSV ───────────────────────────────────────────────────────────
+# ─── BATCH MODE (per-product streaming + upload) ─────────────────────────────
 else:
     st.header("Batch Video Generation from CSV")
 
-    uploaded_csv  = st.file_uploader("Upload Products CSV", type="csv")
-    uploaded_json = st.file_uploader("Upload Images JSON (optional)", type="json")
+    up_csv  = st.file_uploader("Upload Products CSV", type="csv")
+    up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
-        if not uploaded_csv:
-            st.error("Please upload a Products CSV.")
+        if not up_csv:
+            st.error("Upload a Products CSV.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Load & normalize CSV
-                csvp = os.path.join(tmpdir, uploaded_csv.name)
-                open(csvp,"wb").write(uploaded_csv.getbuffer())
-                df = pd.read_csv(csvp)
+                cp = os.path.join(tmpdir, up_csv.name)
+                open(cp, "wb").write(up_csv.getbuffer())
+                df = pd.read_csv(cp)
                 cols = df.columns.str.strip().str.lower()
-                remap = {}
+                rm   = {}
                 if "listing id" in cols:
-                    remap[df.columns[cols.get_loc("listing id")]] = "Listing Id"
+                    rm[df.columns[cols.get_loc("listing id")]] = "Listing Id"
                 if "product id" in cols:
-                    remap[df.columns[cols.get_loc("product id")]] = "Product Id"
+                    rm[df.columns[cols.get_loc("product id")]] = "Product Id"
                 if "title" in cols:
-                    remap[df.columns[cols.get_loc("title")]] = "Title"
-                if remap:
-                    df = df.rename(columns=remap)
+                    rm[df.columns[cols.get_loc("title")]] = "Title"
+                if rm:
+                    df = df.rename(columns=rm)
+
                 # Load JSON
                 images_data = []
-                if uploaded_json:
-                    jp = os.path.join(tmpdir, uploaded_json.name)
-                    open(jp,"wb").write(uploaded_json.getbuffer())
+                if up_json:
+                    jp = os.path.join(tmpdir, up_json.name)
+                    open(jp, "wb").write(up_json.getbuffer())
                     images_data = json.load(open(jp))
 
-                # Per-product loop
+                # Iterate each product
                 for _, row in df.iterrows():
-                    lid = row["Listing Id"]
-                    pid = row["Product Id"]
-                    title = row["Title"]
-
+                    lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(title)
 
-                    # Build images list
+                    # Build images
                     imgs = []
                     if isinstance(images_data, list):
-                        lid_str = str(lid)
-                        entry = next((i for i in images_data
-                                      if str(i.get("listingId"))==lid_str), None)
+                        entry = next((i for i in images_data 
+                                      if str(i.get("listingId"))==str(lid)), None)
                         if entry:
                             for obj in entry.get("images", []):
                                 url = obj.get("imageURL")
                                 if not url: continue
-                                resp = requests.get(url)
+                                buff = requests.get(url).content
                                 fn   = os.path.basename(url)
                                 dst  = os.path.join(tmpdir, fn)
-                                open(dst,"wb").write(resp.content)
+                                open(dst, "wb").write(buff)
                                 imgs.append({"imageURL": dst})
-
                     if not imgs:
-                        st.warning(f"No images for {lid}; skipped.")
+                        st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # Patch & generate
+                    # Generate per-product
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
                     try:
-                        create_videos_and_blogs_from_csv(
-                            input_csv_file     = csvp,
-                            images_data        = images_data,
-                            products_df        = df,
-                            output_base_folder = tmpdir,
+                        create_video_for_product(
+                            listing_id    = lid,
+                            product_id    = pid,
+                            title         = title,
+                            text          = "",
+                            images        = imgs,
+                            output_folder = tmpdir,
                         )
                     except Exception as e:
-                        st.error(f"Batch error {lid}/{pid}: {e}")
+                        st.error(f"Error {lid}/{pid}: {e}")
                         continue
 
-                    # Create subfolder & upload
-                    folder_name = f"{lid}_{pid}"
-                    prod_folder = drive_db.find_or_create_folder(folder_name, parent_id=outputs_id)
-
-                    # Preview & upload video
-                    vid = f"{folder_name}.mp4"
-                    vp  = os.path.join(tmpdir, vid)
+                    # Upload & preview
+                    folder = f"{lid}_{pid}"
+                    prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
+                    vid    = f"{folder}.mp4"
+                    vp     = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
                         st.video(vp)
-                        drive_db.upload_file(vid, open(vp,"rb").read(), "video/mp4", prod_folder)
+                        drive_db.upload_file(vid, open(vp, "rb").read(), "video/mp4", prod_f)
                     else:
                         st.warning(f"Video for {lid} missing")
-
-                    # Upload title text
-                    tf = f"{folder_name}_title.txt"
+                    # Title text
+                    tf = f"{folder}_title.txt"
                     tp = os.path.join(tmpdir, tf)
                     if os.path.exists(tp):
-                        drive_db.upload_file(tf, open(tp,"rb").read(), "text/plain", prod_folder)
+                        drive_db.upload_file(tf, open(tp,"rb").read(), "text/plain", prod_f)
