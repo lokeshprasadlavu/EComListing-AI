@@ -151,24 +151,24 @@ else:
             st.error("Please upload a Products CSV & Images JSON.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # 1) Save & load CSV
+                # Save & load CSV
                 csv_path = os.path.join(tmpdir, up_csv.name)
                 with open(csv_path, "wb") as f:
                     f.write(up_csv.getbuffer())
                 df = pd.read_csv(csv_path)
                 df.columns = [c.strip() for c in df.columns]
                 lower = [c.lower() for c in df.columns]
-                rm = {}
+                rename_map = {}
                 if "listing id" in lower:
-                    rm[df.columns[lower.index("listing id")]] = "Listing Id"
+                    rename_map[df.columns[lower.index("listing id")]] = "Listing Id"
                 if "product id" in lower:
-                    rm[df.columns[lower.index("product id")]] = "Product Id"
+                    rename_map[df.columns[lower.index("product id")]] = "Product Id"
                 if "title" in lower:
-                    rm[df.columns[lower.index("title")]] = "Title"
-                if rm:
-                    df = df.rename(columns=rm)
+                    rename_map[df.columns[lower.index("title")]] = "Title"
+                if rename_map:
+                    df = df.rename(columns=rename_map)
 
-                # 2) Save & load JSON
+                # Save & load JSON
                 images_data = []
                 if up_json:
                     json_path = os.path.join(tmpdir, up_json.name)
@@ -176,54 +176,54 @@ else:
                         f.write(up_json.getbuffer())
                     images_data = json.load(open(json_path))
 
-                # 3) Per‐product loop: generate & upload one at a time
+                # Iterate per product
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title} ({lid}/{pid})...")
 
-                    # build images list for this product
-                    imgs = []
-                    if isinstance(images_data, list):
-                        entry = next(
-                            (i for i in images_data if str(i.get("listingId")) == str(lid)),
-                            None
-                        )
-                        if entry:
-                            for obj in entry.get("images", []):
-                                url = obj.get("imageURL")
-                                if not url: continue
-                                data = requests.get(url).content
-                                fn   = os.path.basename(url)
-                                dst  = os.path.join(tmpdir, fn)
-                                with open(dst, "wb") as f:
-                                    f.write(data)
-                                imgs.append({"imageURL": dst})
-                    if not imgs:
+                    # Build this product's images list
+                    single_images = []
+                    entry = next(
+                        (i for i in images_data if str(i.get("listingId")) == str(lid)),
+                        None
+                    )
+                    if entry:
+                        for obj in entry.get("images", []):
+                            url = obj.get("imageURL")
+                            if not url:
+                                continue
+                            data = requests.get(url).content
+                            fn   = os.path.basename(url)
+                            dst  = os.path.join(tmpdir, fn)
+                            with open(dst, "wb") as f:
+                                f.write(data)
+                            single_images.append({"imageURL": dst})
+                    if not single_images:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # 4) Generate just this product (video + title + blog)
+                    # Generate video + title + blog for just this product
                     single_df = pd.DataFrame([{
                         "Listing Id":  lid,
                         "Product Id":  pid,
                         "Title":       title,
-                        "Description": ""  # or pull from row if you have it
+                        "Description": ""
                     }])
                     create_videos_and_blogs_from_csv(
                         input_csv_file     = None,
-                        images_data        = images_data,
+                        images_data        = single_images,
                         products_df        = single_df,
                         output_base_folder = tmpdir,
                     )
 
-                    # 5) Preview & upload this product’s assets
+                    # Preview & upload
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    # video
+                    # Video
                     vid = f"{folder}.mp4"
                     vp  = os.path.join(tmpdir, vid)
                     if os.path.exists(vp):
@@ -232,9 +232,10 @@ else:
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # text files (title + blog)
+                    # Title & Blog text
                     for fn in os.listdir(tmpdir):
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             fp = os.path.join(tmpdir, fn)
                             drive_db.upload_file(fn, open(fp, "rb").read(), "text/plain", prod_f)
+
 
