@@ -158,15 +158,15 @@ else:
                 df = pd.read_csv(csv_path)
                 df.columns = [c.strip() for c in df.columns]
                 lower = [c.lower() for c in df.columns]
-                rename_map = {}
+                rm = {}
                 if "listing id" in lower:
-                    rename_map[df.columns[lower.index("listing id")]] = "Listing Id"
+                    rm[df.columns[lower.index("listing id")]] = "Listing Id"
                 if "product id" in lower:
-                    rename_map[df.columns[lower.index("product id")]] = "Product Id"
+                    rm[df.columns[lower.index("product id")]] = "Product Id"
                 if "title" in lower:
-                    rename_map[df.columns[lower.index("title")]] = "Title"
-                if rename_map:
-                    df = df.rename(columns=rename_map)
+                    rm[df.columns[lower.index("title")]] = "Title"
+                if rm:
+                    df = df.rename(columns=rm)
 
                 # 2) Load full images JSON
                 full_images_json = []
@@ -199,7 +199,7 @@ else:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # 3b) Patch folders for backend
+                    # 3b) Patch backend folders
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
@@ -216,7 +216,7 @@ else:
                         input_csv_file     = None,
                         images_data        = single_images_data,
                         products_df        = single_df,
-                        output_base_folder = tmpdir,    # matches backend signature
+                        output_base_folder = tmpdir,    # ← correct kwarg
                     )
                     st.success(f"✔️ Generated for {lid}")
 
