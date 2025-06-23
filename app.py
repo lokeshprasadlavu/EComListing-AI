@@ -148,27 +148,27 @@ else:
 
     if st.button("Run Batch"):
         if not all([up_csv, up_json]):
-            st.error("Please upload a Products CSV and a Images JSON.")
+            st.error("Please upload a Products CSV and Images JSON.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # 1) Save & load CSV
+                # 1) Load & normalize CSV
                 csv_path = os.path.join(tmpdir, up_csv.name)
                 with open(csv_path, "wb") as f:
                     f.write(up_csv.getbuffer())
                 df = pd.read_csv(csv_path)
                 df.columns = [c.strip() for c in df.columns]
                 lower = [c.lower() for c in df.columns]
-                rm = {}
+                rename_map = {}
                 if "listing id" in lower:
-                    rm[df.columns[lower.index("listing id")]] = "Listing Id"
+                    rename_map[df.columns[lower.index("listing id")]] = "Listing Id"
                 if "product id" in lower:
-                    rm[df.columns[lower.index("product id")]] = "Product Id"
+                    rename_map[df.columns[lower.index("product id")]] = "Product Id"
                 if "title" in lower:
-                    rm[df.columns[lower.index("title")]] = "Title"
-                if rm:
-                    df = df.rename(columns=rm)
+                    rename_map[df.columns[lower.index("title")]] = "Title"
+                if rename_map:
+                    df = df.rename(columns=rename_map)
 
-                # 2) Save & load Images JSON (if provided)
+                # 2) Load full images JSON
                 full_images_json = []
                 if up_json:
                     json_path = os.path.join(tmpdir, up_json.name)
@@ -176,12 +176,12 @@ else:
                         f.write(up_json.getbuffer())
                     full_images_json = json.load(open(json_path))
 
-                # 3) Iterate per product
+                # 3) Per‐product generation + upload
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title} ({lid}/{pid})…")
 
-                    # Extract this product’s images
+                    # 3a) Build this product’s images_data entry
                     entry = next(
                         (e for e in full_images_json if str(e.get("listingId")) == str(lid)),
                         None
@@ -194,15 +194,16 @@ else:
                             "images":    entry["images"]
                         }]
                     st.write("DEBUG single_images_data:", single_images_data)
+
                     if not single_images_data:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # Patch backend folders
+                    # 3b) Patch folders for backend
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # Generate video + title + blog for this product
+                    # 3c) Generate video + title + blog for this one product
                     single_df = pd.DataFrame([{
                         "Listing Id":  lid,
                         "Product Id":  pid,
@@ -215,30 +216,32 @@ else:
                         input_csv_file     = None,
                         images_data        = single_images_data,
                         products_df        = single_df,
-                        output_folder      = tmpdir,    # <— corrected kwarg name
+                        output_base_folder = tmpdir,    # matches backend signature
                     )
                     st.success(f"✔️ Generated for {lid}")
 
-                    # List outputs
+                    # 3d) Inspect outputs
                     files = os.listdir(tmpdir)
                     st.write("DEBUG tmpdir contents:", files)
 
-                    # Preview & upload
+                    # 4) Upload to Drive
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    video_file = f"{folder}.mp4"
-                    if video_file in files:
-                        st.video(os.path.join(tmpdir, video_file))
+                    # 4a) Video
+                    vid = f"{folder}.mp4"
+                    if vid in files:
+                        st.video(os.path.join(tmpdir, vid))
                         drive_db.upload_file(
-                            video_file,
-                            open(os.path.join(tmpdir, video_file), "rb").read(),
+                            vid,
+                            open(os.path.join(tmpdir, vid), "rb").read(),
                             "video/mp4",
                             prod_f
                         )
                     else:
                         st.warning(f"Video for {lid} missing")
 
+                    # 4b) Title & Blog text
                     for fn in files:
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             path = os.path.join(tmpdir, fn)
