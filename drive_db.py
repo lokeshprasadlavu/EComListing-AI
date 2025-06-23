@@ -52,37 +52,21 @@ def _get_service():
     return _drive_service
 
 def init_from_secrets():
-    """
-    Auto initialize from Streamlit secrets.
-    Prefers OAuth if [oauth_client] exists, else falls back to service-account.
-    """
-    # Attempt OAuth first
     oauth_cfg = st.secrets.get("oauth_client", None)
     if oauth_cfg:
-        try:
-            from google_auth_oauthlib.flow import InstalledAppFlow
-            from google.auth.transport.requests import Request
-        except ImportError as e:
-            st.error("Missing OAuth libraries; install google-auth-oauthlib")
-            st.stop()
-
         creds = None
         if os.path.exists(_TOKEN_FILE):
-            try:
-                with open(_TOKEN_FILE, "rb") as f:
-                    creds = pickle.load(f)
-            except Exception:
-                creds = None
-
+            with open(_TOKEN_FILE, "rb") as f:
+                creds = pickle.load(f)
         if not creds or not getattr(creds, "valid", False):
             if creds and getattr(creds, "expired", False) and getattr(creds, "refresh_token", None):
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_config(oauth_cfg, SCOPES_OAUTH)
-                creds = flow.run_local_server(port=0)
+                # HEADLESS: don’t try to auto-open a browser
+                creds = flow.run_local_server(port=0, open_browser=False)
             with open(_TOKEN_FILE, "wb") as f:
                 pickle.dump(creds, f)
-
         oauth_service = build("drive", "v3", credentials=creds)
         init("oauth", oauth_service=oauth_service)
         return
