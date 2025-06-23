@@ -144,11 +144,11 @@ if mode == "Single Product":
 else:
     st.header("Batch Video & Blog Generation from CSV")
     up_csv  = st.file_uploader("Upload Products CSV", type="csv")
-    up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
+    up_json = st.file_uploader("Upload Images JSON", type="json")
 
     if st.button("Run Batch"):
-        if not up_csv:
-            st.error("Please upload a Products CSV.")
+        if not all([up_csv, up_json]):
+            st.error("Please upload Products CSV and Images JSON files.")
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # 1) Load & normalize master CSV
@@ -183,12 +183,7 @@ else:
                     st.write("DEBUG single_csv:", single_csv)
 
                     # 3b) Build the one‐row DataFrame for products_df
-                    single_df = pd.DataFrame([{
-                        "Listing Id":  lid,
-                        "Product Id":  pid,
-                        "Title":       title,
-                        "Description": row.get("Description", "")
-                    }])
+                    single_df = pd.read_csv(single_csv)
                     st.write("DEBUG single_df:", single_df.to_dict(orient="records"))
 
                     # 3c) Build images_data for this product
