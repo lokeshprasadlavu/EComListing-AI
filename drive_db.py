@@ -7,26 +7,25 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 # -----------------------------------------------------------------------------
 # Globals
 # -----------------------------------------------------------------------------
-SCOPES_SERVICE    = ["https://www.googleapis.com/auth/drive"]
-SCOPES_OAUTH      = ["https://www.googleapis.com/auth/drive.file"]
-DRIVE_FOLDER_ID   = None       # to be set by app.py
-_drive_service    = None        # holds the active Drive client
-_TOKEN_FILE       = "drive_token.pickle"
+SCOPES_SERVICE  = ["https://www.googleapis.com/auth/drive"]
+SCOPES_OAUTH    = ["https://www.googleapis.com/auth/drive"]
+DRIVE_FOLDER_ID = None                # to be set by app.py
+_drive_service  = None                # will hold the active Drive client
 
 # -----------------------------------------------------------------------------
-# Initialization
+# Initialization helpers
 # -----------------------------------------------------------------------------
 def init(provider: str, **kwargs):
     """
-    Initialize the Drive client.
-      provider: "service_account" or "oauth"
-      kwargs:
-        if service_account: sa_info=<dict>
-        if oauth:           oauth_service=<Resource>
+    provider: "service_account" or "oauth"
+    kwargs:
+      - if service_account: sa_info=<dict>
+      - if oauth:           oauth_service=<Resource>
     """
     global _drive_service
 
@@ -50,37 +49,44 @@ def init(provider: str, **kwargs):
 
 def _get_service():
     if _drive_service is None:
-        raise RuntimeError("drive_db not initialized; call drive_db.init(...) first")
+        raise RuntimeError("drive_db not initialized; call drive_db.init_from_secrets() first")
     return _drive_service
 
+# -----------------------------------------------------------------------------
+# Auto‐init from Streamlit secrets
+# -----------------------------------------------------------------------------
 def init_from_secrets():
-    oauth_cfg = st.secrets.get("oauth_client", None)
-    if oauth_cfg:
-        creds = None
-        if os.path.exists(_TOKEN_FILE):
-            with open(_TOKEN_FILE, "rb") as f:
-                creds = pickle.load(f)
-        if not creds or not getattr(creds, "valid", False):
-            if creds and getattr(creds, "expired", False) and getattr(creds, "refresh_token", None):
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_config(oauth_cfg, SCOPES_OAUTH)
-                # HEADLESS: don’t try to auto-open a browser
-                creds = flow.run_local_server(port=0, open_browser=False)
-            with open(_TOKEN_FILE, "wb") as f:
-                pickle.dump(creds, f)
-        oauth_service = build("drive", "v3", credentials=creds)
-        init("oauth", oauth_service=oauth_service)
+    """
+    1) Try manual OAuth (refresh token from Playground in [oauth_manual])
+    2) Else fall back to service-account ([drive_service_account])
+    """
+    manual = st.secrets.get("oauth_manual", None)
+    if manual:
+        # Build Credentials directly from your stored refresh token
+        creds = Credentials(
+            token=None,
+            refresh_token=manual["refresh_token"],
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=manual["client_id"],
+            client_secret=manual["client_secret"],
+            scopes=SCOPES_OAUTH,
+        )
+        # Force a token refresh (so we have a valid access_token immediately)
+        creds.refresh(Request())
+
+        svc = build("drive", "v3", credentials=creds)
+        init("oauth", oauth_service=svc)
         return
 
-    # Fallback to service-account
+    # Service-account fallback
     sa_info = st.secrets.get("drive_service_account", None)
     if sa_info:
         init("service_account", sa_info=sa_info)
         return
 
-    st.error("No Drive credentials found in .streamlit/secrets.toml")
+    st.error("No Drive credentials found in secrets.toml (oauth_manual or drive_service_account)")
     st.stop()
+
 
 # -----------------------------------------------------------------------------
 # Core API functions

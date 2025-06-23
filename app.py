@@ -35,12 +35,19 @@ def _get_or_file(path, *args, **kwargs):
 requests.get = _get_or_file
 
 # ─── Secrets & OpenAI Setup ──────────────────────────────────────────────────
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
 os.environ["OPENAI_API_KEY"] = openai.api_key
 drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 
 # ─── Drive DB Init ───────────────────────────────────────────────────────────
-drive_db.init_from_secrets()
+with st.spinner("Connecting to Database..."):
+    try:
+        drive_db.init_from_secrets()
+        st.success("Database connected!")
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        st.stop()
+
 drive_db.DRIVE_FOLDER_ID = drive_folder_id
 inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id=drive_folder_id)
 outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)
