@@ -181,10 +181,10 @@ else:
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title}...")
 
+
                     # Build this product’s images_data entry
                     entry = next(
-                        (i for i in full_images_json
-                         if str(i.get("listingId")) == str(lid)),
+                        (i for i in full_images_json if str(i.get("listingId")) == str(lid)),
                         None
                     )
                     single_images_data = []
@@ -195,26 +195,40 @@ else:
                             "images":    entry.get("images", [])
                         }]
 
+                    # DEBUG: dump the images payload
+                    st.write("➤ DEBUG single_images_data:", single_images_data)
+
                     if not single_images_data or not single_images_data[0]["images"]:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # Patch backend folders
-                    vgs.audio_folder  = tmpdir
-                    vgs.output_folder = tmpdir
-
-                    # Generate via batch helper for this one product
+                    # 3b) Build the single‐row DataFrame
                     single_df = pd.DataFrame([{
                         "Listing Id":  lid,
                         "Product Id":  pid,
                         "Title":       title,
+                        "Description": ""   # or pull from row if you want
                     }])
-                    create_videos_and_blogs_from_csv(
-                        input_csv_file     = None,
-                        images_data        = single_images_data,
-                        products_df        = single_df,
-                        output_base_folder = tmpdir,
-                    )
+
+                    # DEBUG: show what DataFrame looks like
+                    st.write("➤ DEBUG single_df:", single_df.to_dict(orient="records"))
+
+                    # 3c) Call the batch helper
+                    try:
+                        create_videos_and_blogs_from_csv(
+                            input_csv_file     = None,
+                            images_data        = single_images_data,
+                            products_df        = single_df,
+                            output_base_folder = tmpdir,
+                        )
+                        st.success(f"✔️ Finished backend run for {lid}")
+                    except Exception as e:
+                        st.error(f"❌ Backend error for {lid}: {e}")
+                        continue
+
+                    # DEBUG: list out the tmpdir contents so you can see exactly what files got created
+                    files = os.listdir(tmpdir)
+                    st.write("➤ DEBUG tmpdir contents:", files)
 
                     # Preview & upload the results
                     folder = f"{lid}_{pid}"
