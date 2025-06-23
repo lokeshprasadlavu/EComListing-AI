@@ -18,7 +18,7 @@ from video_generation_service import create_video_for_product, create_videos_and
 
 
 # ─── Page Config & Auth ──────────────────────────────────────────────────────
-st.set_page_config(page_title="ProductPixel AI", layout="wide")
+st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for all your eCommerce Listings.")
 
