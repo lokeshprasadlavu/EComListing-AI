@@ -19,10 +19,11 @@ def get_oauth_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "oauth_client.json", SCOPES
-            )
+           # pull the client config from st.secrets
+            client_config = st.secrets["oauth_client"]
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             creds = flow.run_local_server(port=0)
+        # save for next time
         with open("token.pickle","wb") as f:
             pickle.dump(creds, f)
     return build("drive", "v3", credentials=creds)
