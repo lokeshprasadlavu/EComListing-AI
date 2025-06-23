@@ -1,42 +1,27 @@
-import os
-import pickle
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from google.auth.transport.requests import Request
-import drive_db
-
-# OAuth 2.0 scopes for file creation
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-
-def get_oauth_service():
-    creds = None
-    # Load saved token
-    if os.path.exists("token.pickle"):
-        with open("token.pickle","rb") as f:
-            creds = pickle.load(f)
-    # Refresh or do full flow
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-           # pull the client config from st.secrets
-            client_config = st.secrets["oauth_client"]
-            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-            creds = flow.run_local_server(port=0)
-        # save for next time
-        with open("token.pickle","wb") as f:
-            pickle.dump(creds, f)
-    return build("drive", "v3", credentials=creds)
-
-# Initialize Drive DB with OAuth
-drive_service = get_oauth_service()
-drive_db.init_with_oauth(drive_service)
-
-# ─── Monkey‐patch requests.get to support local files ─────────────────────────
+import json
+import tempfile
+import zipfile
+import glob
+import time
 import os
 import requests
 from requests.models import Response
 
+import streamlit as st
+import pandas as pd
+import openai
+from PIL import Image
+
+import drive_db
+import video_generation_service as vgs
+from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
+
+
+# ─── Page Config & Auth ──────────────────────────────────────────────────────
+st.set_page_config(page_title="AI Video Generator", layout="wide")
+st.title("📹 AI Video Generator")
+
+# ─── Monkey‐patch requests.get to support local files ─────────────────────────
 _orig_get = requests.get
 
 def _get_or_file(path, *args, **kwargs):
@@ -48,26 +33,6 @@ def _get_or_file(path, *args, **kwargs):
     return _orig_get(path, *args, **kwargs)
 
 requests.get = _get_or_file
-# ─────────────────────────────────────────────────────────────────────────────
-
-import json
-import tempfile
-import zipfile
-import glob
-import time
-
-import streamlit as st
-import pandas as pd
-import openai
-from PIL import Image
-
-import drive_db
-import video_generation_service as vgs
-from video_generation_service import create_video_for_product, create_videos_and_blogs_from_csv
-
-# ─── Page Config & Auth ──────────────────────────────────────────────────────
-st.set_page_config(page_title="AI Video Generator", layout="wide")
-st.title("📹 AI Video Generator")
 
 # ─── Secrets & OpenAI Setup ──────────────────────────────────────────────────
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -75,6 +40,7 @@ os.environ["OPENAI_API_KEY"] = openai.api_key
 drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 
 # ─── Drive DB Init ───────────────────────────────────────────────────────────
+drive_db.init_from_secrets()
 drive_db.DRIVE_FOLDER_ID = drive_folder_id
 inputs_id   = drive_db.find_or_create_folder("inputs",  parent_id=drive_folder_id)
 outputs_id  = drive_db.find_or_create_folder("outputs", parent_id=drive_folder_id)

@@ -1,5 +1,6 @@
 import io
 import os
+import pickle
 import streamlit as st
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -8,48 +9,107 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 # -----------------------------------------------------------------------------
 # Globals
 # -----------------------------------------------------------------------------
-SCOPES = ["https://www.googleapis.com/auth/drive"]
-DRIVE_FOLDER_ID = None       # set by app.py
-_drive_service = None        # will hold either SA or OAuth client
-_use_oauth = False           # toggles which auth to use
+SCOPES_SERVICE    = ["https://www.googleapis.com/auth/drive"]
+SCOPES_OAUTH      = ["https://www.googleapis.com/auth/drive.file"]
+DRIVE_FOLDER_ID   = None       # to be set by app.py
+_drive_service    = None        # holds the active Drive client
+_TOKEN_FILE       = "drive_token.pickle"
 
 # -----------------------------------------------------------------------------
 # Initialization
 # -----------------------------------------------------------------------------
-def init_with_oauth(drive_service):
-    """Call this from app.py after running the OAuth flow."""
-    global _drive_service, _use_oauth
-    _drive_service = drive_service
-    _use_oauth = True
+def init(provider: str, **kwargs):
+    """
+    Initialize the Drive client.
+      provider: "service_account" or "oauth"
+      kwargs:
+        if service_account: sa_info=<dict>
+        if oauth:           oauth_service=<Resource>
+    """
+    global _drive_service
 
-def _get_service_account_client():
-    """Builds a Drive service using the service-account in secrets."""
-    sa_info = st.secrets["drive_service_account"]
-    creds   = service_account.Credentials.from_service_account_info(
-        sa_info, scopes=SCOPES
-    )
-    return build("drive", "v3", credentials=creds)
+    if provider == "service_account":
+        sa_info = kwargs.get("sa_info")
+        if not isinstance(sa_info, dict):
+            raise ValueError("service_account init requires sa_info=dict")
+        creds = service_account.Credentials.from_service_account_info(
+            sa_info, scopes=SCOPES_SERVICE
+        )
+        _drive_service = build("drive", "v3", credentials=creds)
 
-def _get_drive_service():
-    """Returns the active Drive service (OAuth if initialized, else SA)."""
-    if _use_oauth and _drive_service is not None:
-        return _drive_service
-    return _get_service_account_client()
+    elif provider == "oauth":
+        oauth_svc = kwargs.get("oauth_service")
+        if oauth_svc is None:
+            raise ValueError("oauth init requires oauth_service")
+        _drive_service = oauth_svc
+
+    else:
+        raise ValueError(f"Unknown Drive init provider: {provider}")
+
+def _get_service():
+    if _drive_service is None:
+        raise RuntimeError("drive_db not initialized; call drive_db.init(...) first")
+    return _drive_service
+
+def init_from_secrets():
+    """
+    Auto initialize from Streamlit secrets.
+    Prefers OAuth if [oauth_client] exists, else falls back to service-account.
+    """
+    # Attempt OAuth first
+    oauth_cfg = st.secrets.get("oauth_client", None)
+    if oauth_cfg:
+        try:
+            from google_auth_oauthlib.flow import InstalledAppFlow
+            from google.auth.transport.requests import Request
+        except ImportError as e:
+            st.error("Missing OAuth libraries; install google-auth-oauthlib")
+            st.stop()
+
+        creds = None
+        if os.path.exists(_TOKEN_FILE):
+            try:
+                with open(_TOKEN_FILE, "rb") as f:
+                    creds = pickle.load(f)
+            except Exception:
+                creds = None
+
+        if not creds or not getattr(creds, "valid", False):
+            if creds and getattr(creds, "expired", False) and getattr(creds, "refresh_token", None):
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_config(oauth_cfg, SCOPES_OAUTH)
+                creds = flow.run_local_server(port=0)
+            with open(_TOKEN_FILE, "wb") as f:
+                pickle.dump(creds, f)
+
+        oauth_service = build("drive", "v3", credentials=creds)
+        init("oauth", oauth_service=oauth_service)
+        return
+
+    # Fallback to service-account
+    sa_info = st.secrets.get("drive_service_account", None)
+    if sa_info:
+        init("service_account", sa_info=sa_info)
+        return
+
+    st.error("No Drive credentials found in .streamlit/secrets.toml")
+    st.stop()
 
 # -----------------------------------------------------------------------------
 # Core API functions
 # -----------------------------------------------------------------------------
 def list_files(mime_filter=None, parent_id=None):
-    svc = _get_drive_service()
+    svc = _get_service()
     pid = parent_id or DRIVE_FOLDER_ID
-    q = f"'{pid}' in parents and trashed = false"
+    q = f"'{pid}' in parents and trashed=false"
     if mime_filter:
         q += f" and mimeType contains '{mime_filter}'"
     resp = svc.files().list(q=q, fields="files(id,name,mimeType)").execute()
     return resp.get("files", [])
 
 def download_file(file_id):
-    svc = _get_drive_service()
+    svc = _get_service()
     request = svc.files().get_media(fileId=file_id)
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
@@ -60,32 +120,26 @@ def download_file(file_id):
     return buf
 
 def upload_file(name, data, mime_type, parent_id=None):
-    svc = _get_drive_service()
+    svc = _get_service()
     pid = parent_id or DRIVE_FOLDER_ID
 
-    # Check for existing file
     existing = svc.files().list(
-        q=f"name='{name}' and '{pid}' in parents and trashed = false",
+        q=f"name='{name}' and '{pid}' in parents and trashed=false",
         fields="files(id)"
     ).execute().get("files", [])
 
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime_type)
     if existing:
-        return svc.files().update(
-            fileId=existing[0]["id"], media_body=media
-        ).execute()
+        return svc.files().update(fileId=existing[0]["id"], media_body=media).execute()
     else:
         metadata = {"name": name, "parents": [pid]}
-        return svc.files().create(
-            body=metadata, media_body=media
-        ).execute()
+        return svc.files().create(body=metadata, media_body=media).execute()
 
 def find_folder(name, parent_id=None):
-    svc = _get_drive_service()
+    svc = _get_service()
     pid = parent_id or DRIVE_FOLDER_ID
     q = (
-        f"name='{name}' "
-        "and mimeType='application/vnd.google-apps.folder' "
+        f"name='{name}' and mimeType='application/vnd.google-apps.folder' "
         f"and '{pid}' in parents and trashed=false"
     )
     resp = svc.files().list(q=q, fields="files(id)").execute()
@@ -93,7 +147,7 @@ def find_folder(name, parent_id=None):
     return files[0]["id"] if files else None
 
 def create_folder(name, parent_id=None):
-    svc = _get_drive_service()
+    svc = _get_service()
     pid = parent_id or DRIVE_FOLDER_ID
     metadata = {
         "name": name,
