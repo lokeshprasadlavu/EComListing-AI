@@ -18,8 +18,8 @@ from video_generation_service import create_video_for_product, create_videos_and
 
 
 # ─── Page Config & Auth ──────────────────────────────────────────────────────
-st.set_page_config(page_title="AI Video Generator", layout="wide")
-st.title("📹 AI Video Generator")
+st.set_page_config(page_title="Multimedia Content Generation with AI", layout="wide")
+st.title("Multimedia Content Generation with AI")
 
 # ─── Monkey‐patch requests.get to support local files ─────────────────────────
 _orig_get = requests.get
@@ -43,7 +43,6 @@ drive_folder_id = st.secrets["DRIVE_FOLDER_ID"]
 with st.spinner("Connecting to Database..."):
     try:
         drive_db.init_from_secrets()
-        st.success("Database connected!")
     except Exception as e:
         st.error(f"Database error: {str(e)}")
         st.stop()
@@ -93,11 +92,11 @@ vgs.fonts_folder   = preload_fonts(fonts_id)
 vgs.logo, vgs.logo_path, vgs.logo_width, vgs.logo_height = preload_logo(logo_id)
 
 # ─── Mode selector ───────────────────────────────────────────────────────────
-mode = st.sidebar.radio("Mode", ["Single Product", "Batch from CSV"])
+mode = st.sidebar.radio("Mode", ["Product Video Generation", "Product Video & Blog Generation from CSV"])
 
 # ─── Single Product ──────────────────────────────────────────────────────────
-if mode == "Single Product":
-    st.header("Single Product Video Generation")
+if mode == "Product Video Generation":
+    st.header("Product Video Generation")
     listing_id  = st.text_input("Listing ID")
     product_id  = st.text_input("Product ID")
     title       = st.text_input("Product Title")
@@ -149,7 +148,7 @@ if mode == "Single Product":
                     st.error(f"Video {vid} missing")
 
 # ─── Batch from CSV Mode ─────────────────────────────────────────────────────
-st.header("Batch Video & Blog Generation from CSV")
+st.header("Product Video & Blog Generation from CSV")
 up_csv  = st.file_uploader("Upload Products CSV", type="csv")
 up_json = st.file_uploader("Upload Images JSON", type="json")
 
@@ -212,6 +211,13 @@ if st.button("Run Batch"):
                         products_df        = pd.read_csv(single_csv),
                         output_base_folder = prod_tmp,
                     )
+
+                    # Display title & blog before the video
+                    blog_file  = os.path.join(prod_tmp, f"{lid}_{pid}_blog.txt")
+
+                    if os.path.exists(blog_file):
+                        with open(blog_file, "r") as bf:
+                            st.markdown(bf.read())
 
                     # Wait for MP4
                     deadline = time.time() + 120
