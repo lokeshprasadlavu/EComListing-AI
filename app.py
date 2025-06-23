@@ -212,13 +212,6 @@ if st.button("Run Batch"):
                         output_base_folder = prod_tmp,
                     )
 
-                    # Display title & blog before the video
-                    blog_file  = os.path.join(prod_tmp, f"{lid}_{pid}_blog.txt")
-
-                    if os.path.exists(blog_file):
-                        with open(blog_file, "r") as bf:
-                            st.markdown(bf.read())
-
                     # Wait for MP4
                     deadline = time.time() + 120
                     mp4s = []
@@ -243,6 +236,10 @@ if st.button("Run Batch"):
                     for vp in mp4s:
                         st.video(vp)
                         drive_db.upload_file(os.path.basename(vp), open(vp,"rb").read(), "video/mp4", prod_f)
+
+                    blog_name = f"{lid}_{pid}.txt"
                     for tp in texts:
+                        if os.path.basename(tp) == blog_name:
+                            with open(tp, "r", encoding="utf-8") as f:
+                                st.markdown(f.read())
                         drive_db.upload_file(os.path.basename(tp), open(tp,"rb").read(), "text/plain", prod_f)
-                        st.write(f"Uploaded {os.path.basename(tp)}")
