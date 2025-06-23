@@ -152,10 +152,10 @@ else:
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # 1) Load & normalize master CSV
-                master_csv = os.path.join(tmpdir, up_csv.name)
-                with open(master_csv, "wb") as f:
+                master_path = os.path.join(tmpdir, up_csv.name)
+                with open(master_path, "wb") as f:
                     f.write(up_csv.getbuffer())
-                df = pd.read_csv(master_csv)
+                df = pd.read_csv(master_path)
                 df.columns = [c.strip() for c in df.columns]
                 lower = [c.lower() for c in df.columns]
                 rm = {}
@@ -168,25 +168,25 @@ else:
                 if rm:
                     df = df.rename(columns=rm)
 
-                # 2) Load full JSON once
+                # 2) Load full images JSON
                 full_images_json = []
                 if up_json:
-                    images_json = os.path.join(tmpdir, up_json.name)
-                    with open(images_json, "wb") as f:
+                    json_path = os.path.join(tmpdir, up_json.name)
+                    with open(json_path, "wb") as f:
                         f.write(up_json.getbuffer())
-                    full_images_json = json.load(open(images_json))
+                    full_images_json = json.load(open(json_path))
 
-                # 3) Loop per product
+                # 3) Per‐product loop
                 for _, row in df.iterrows():
                     lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
                     st.subheader(f"Generating {title} ({lid}/{pid})…")
 
-                    # a) Extract only this row into its own CSV
+                    # (a) Write out one‐row CSV
                     single_csv = os.path.join(tmpdir, f"{lid}_{pid}.csv")
                     pd.DataFrame([row]).to_csv(single_csv, index=False)
-                    st.write("DEBUG single_csv path:", single_csv)
+                    st.write("DEBUG single_csv:", single_csv)
 
-                    # b) Build single‐product images_data
+                    # (b) Build images_data for this product
                     entry = next(
                         (e for e in full_images_json if str(e.get("listingId"))==str(lid)),
                         None
@@ -203,27 +203,36 @@ else:
                         st.warning(f"No images for {lid}; skipping.")
                         continue
 
-                    # c) Patch backend folders
+                    # patch folders
                     vgs.audio_folder  = tmpdir
                     vgs.output_folder = tmpdir
 
-                    # d) Call the CSV helper with that one‐row CSV
+                    # (c) Call the CSV helper with both CSV path and one-row DF
+                    single_df = pd.DataFrame([{
+                        "Listing Id":  lid,
+                        "Product Id":  pid,
+                        "Title":       title,
+                        "Description": ""  # or row.get("Description","")
+                    }])
+                    st.write("DEBUG single_df:", single_df.to_dict(orient="records"))
+
                     create_videos_and_blogs_from_csv(
                         input_csv_file     = single_csv,
                         images_data        = single_images_data,
-                        products_df        = None,
+                        products_df        = single_df,
                         output_base_folder = tmpdir,
                     )
                     st.success(f"✔️ Generated for {lid}")
 
-                    # e) Inspect and upload results
+                    # (d) Inspect outputs
                     files = os.listdir(tmpdir)
                     st.write("DEBUG tmpdir contents:", files)
 
+                    # (e) Preview & upload
                     folder = f"{lid}_{pid}"
                     prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    # upload video
+                    # video
                     vid = f"{folder}.mp4"
                     if vid in files:
                         st.video(os.path.join(tmpdir, vid))
@@ -236,7 +245,7 @@ else:
                     else:
                         st.warning(f"Video for {lid} missing")
 
-                    # upload text files
+                    # title + blog text
                     for fn in files:
                         if fn.startswith(folder) and fn.lower().endswith(".txt"):
                             path = os.path.join(tmpdir, fn)
