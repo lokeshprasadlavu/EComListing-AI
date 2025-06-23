@@ -148,98 +148,99 @@ if mode == "Product Video Generation":
                     st.error(f"Video {vid} missing")
 
 # ─── Batch from CSV Mode ─────────────────────────────────────────────────────
-st.header("Product Video & Blog Generation from CSV")
-up_csv  = st.file_uploader("Upload Products CSV", type="csv")
-up_json = st.file_uploader("Upload Images JSON", type="json")
+else:
+    st.header("Product Video & Blog Generation from CSV")
+    up_csv  = st.file_uploader("Upload Products CSV", type="csv")
+    up_json = st.file_uploader("Upload Images JSON", type="json")
 
-if st.button("Run Batch"):
-    if not all([up_csv, up_json]):
-        st.error("Please upload Products CSV and Images JSON files.")
-    else:
-        # Load & normalize master CSV & JSON once
-        with tempfile.TemporaryDirectory() as master_tmp:
-            master_csv = os.path.join(master_tmp, up_csv.name)
-            with open(master_csv, "wb") as f:
-                f.write(up_csv.getbuffer())
-            df = pd.read_csv(master_csv)
-            df.columns = [c.strip() for c in df.columns]
-            lower = [c.lower() for c in df.columns]
-            rm = {}
-            if "listing id" in lower:
-                rm[df.columns[lower.index("listing id")]] = "Listing Id"
-            if "product id" in lower:
-                rm[df.columns[lower.index("product id")]] = "Product Id"
-            if "title" in lower:
-                rm[df.columns[lower.index("title")]] = "Title"
-            if rm:
-                df = df.rename(columns=rm)
+    if st.button("Run Batch"):
+        if not all([up_csv, up_json]):
+            st.error("Please upload Products CSV and Images JSON files.")
+        else:
+            # Load & normalize master CSV & JSON once
+            with tempfile.TemporaryDirectory() as master_tmp:
+                master_csv = os.path.join(master_tmp, up_csv.name)
+                with open(master_csv, "wb") as f:
+                    f.write(up_csv.getbuffer())
+                df = pd.read_csv(master_csv)
+                df.columns = [c.strip() for c in df.columns]
+                lower = [c.lower() for c in df.columns]
+                rm = {}
+                if "listing id" in lower:
+                    rm[df.columns[lower.index("listing id")]] = "Listing Id"
+                if "product id" in lower:
+                    rm[df.columns[lower.index("product id")]] = "Product Id"
+                if "title" in lower:
+                    rm[df.columns[lower.index("title")]] = "Title"
+                if rm:
+                    df = df.rename(columns=rm)
 
-            full_images_json = []
-            if up_json:
-                images_path = os.path.join(master_tmp, up_json.name)
-                with open(images_path, "wb") as f:
-                    f.write(up_json.getbuffer())
-                full_images_json = json.load(open(images_path))
+                full_images_json = []
+                if up_json:
+                    images_path = os.path.join(master_tmp, up_json.name)
+                    with open(images_path, "wb") as f:
+                        f.write(up_json.getbuffer())
+                    full_images_json = json.load(open(images_path))
 
-            # Now per-product, use a fresh tempdir for outputs
-            for _, row in df.iterrows():
-                lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                st.subheader(f"Product Video of {title}")
+                # Now per-product, use a fresh tempdir for outputs
+                for _, row in df.iterrows():
+                    lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
+                    st.subheader(f"Product Video of {title}")
 
-                # Each product gets its own workspace
-                with tempfile.TemporaryDirectory() as prod_tmp:
-                    # One-row CSV
-                    single_csv = os.path.join(prod_tmp, f"{lid}_{pid}.csv")
-                    pd.DataFrame([row]).to_csv(single_csv, index=False)
+                    # Each product gets its own workspace
+                    with tempfile.TemporaryDirectory() as prod_tmp:
+                        # One-row CSV
+                        single_csv = os.path.join(prod_tmp, f"{lid}_{pid}.csv")
+                        pd.DataFrame([row]).to_csv(single_csv, index=False)
 
-                    # Build JSON, patch globals
-                    entry = next((e for e in full_images_json if str(e["listingId"])==str(lid)), None)
-                    single_images_data = [{"listingId":lid,"productId":pid,"images":entry["images"]}] if entry else []
-                    single_json = os.path.join(prod_tmp, f"{lid}_{pid}.json")
-                    with open(single_json,"w") as f:
-                        json.dump(single_images_data, f)
+                        # Build JSON, patch globals
+                        entry = next((e for e in full_images_json if str(e["listingId"])==str(lid)), None)
+                        single_images_data = [{"listingId":lid,"productId":pid,"images":entry["images"]}] if entry else []
+                        single_json = os.path.join(prod_tmp, f"{lid}_{pid}.json")
+                        with open(single_json,"w") as f:
+                            json.dump(single_images_data, f)
 
-                    vgs.csv_file      = single_csv
-                    vgs.images_json   = single_json
-                    vgs.audio_folder  = prod_tmp
-                    vgs.output_folder = prod_tmp
+                        vgs.csv_file      = single_csv
+                        vgs.images_json   = single_json
+                        vgs.audio_folder  = prod_tmp
+                        vgs.output_folder = prod_tmp
 
-                    # Call the helper
-                    create_videos_and_blogs_from_csv(
-                        input_csv_file     = single_csv,
-                        images_data        = single_images_data,
-                        products_df        = pd.read_csv(single_csv),
-                        output_base_folder = prod_tmp,
-                    )
+                        # Call the function to create videos and blogs
+                        create_videos_and_blogs_from_csv(
+                            input_csv_file     = single_csv,
+                            images_data        = single_images_data,
+                            products_df        = pd.read_csv(single_csv),
+                            output_base_folder = prod_tmp,
+                        )
 
-                    # Wait for MP4
-                    deadline = time.time() + 120
-                    mp4s = []
-                    while time.time() < deadline:
-                        mp4s = glob.glob(os.path.join(prod_tmp, "**", "*.mp4"), recursive=True)
-                        if mp4s: break
-                        time.sleep(1)
-                    if not mp4s:
-                        st.warning(f"No video for {lid}")
-                        continue
+                        # Wait for MP4
+                        deadline = time.time() + 120
+                        mp4s = []
+                        while time.time() < deadline:
+                            mp4s = glob.glob(os.path.join(prod_tmp, "**", "*.mp4"), recursive=True)
+                            if mp4s: break
+                            time.sleep(1)
+                        if not mp4s:
+                            st.warning(f"No video for {lid}")
+                            continue
 
-                    # Collect all outputs
-                    texts = []
-                    for root,_,files in os.walk(prod_tmp):
-                        for fn in files:
-                            if fn.lower().endswith(".txt"): texts.append(os.path.join(root, fn))
+                        # Collect all outputs
+                        texts = []
+                        for root,_,files in os.walk(prod_tmp):
+                            for fn in files:
+                                if fn.lower().endswith(".txt"): texts.append(os.path.join(root, fn))
 
-                    # Upload into its own Drive folder
-                    folder = f"{lid}_{pid}"
-                    prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
+                        # Upload into its own Drive folder
+                        folder = f"{lid}_{pid}"
+                        prod_f = drive_db.find_or_create_folder(folder, parent_id=outputs_id)
 
-                    for vp in mp4s:
-                        st.video(vp)
-                        drive_db.upload_file(os.path.basename(vp), open(vp,"rb").read(), "video/mp4", prod_f)
+                        for vp in mp4s:
+                            st.video(vp)
+                            drive_db.upload_file(os.path.basename(vp), open(vp,"rb").read(), "video/mp4", prod_f)
 
-                    blog_name = f"{lid}_{pid}.txt"
-                    for tp in texts:
-                        if os.path.basename(tp) == blog_name:
-                            with open(tp, "r", encoding="utf-8") as f:
-                                st.markdown(f.read())
-                        drive_db.upload_file(os.path.basename(tp), open(tp,"rb").read(), "text/plain", prod_f)
+                        blog_name = f"{lid}_{pid}.txt"
+                        for tp in texts:
+                            if os.path.basename(tp) == blog_name:
+                                with open(tp, "r", encoding="utf-8") as f:
+                                    st.markdown(f.read())
+                            drive_db.upload_file(os.path.basename(tp), open(tp,"rb").read(), "text/plain", prod_f)
