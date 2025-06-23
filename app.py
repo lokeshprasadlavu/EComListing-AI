@@ -18,8 +18,9 @@ from video_generation_service import create_video_for_product, create_videos_and
 
 
 # ─── Page Config & Auth ──────────────────────────────────────────────────────
-st.set_page_config(page_title="Multimedia Content Generation with AI", layout="wide")
-st.title("Multimedia Content Generation with AI")
+st.set_page_config(page_title="ProductPixel AI", layout="wide")
+st.title("ProductPixel AI")
+st.markdown("AI-Powered Multimedia Content for Your eCommerce Listings")
 
 # ─── Monkey‐patch requests.get to support local files ─────────────────────────
 _orig_get = requests.get
