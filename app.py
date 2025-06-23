@@ -1,3 +1,35 @@
+import os
+import pickle
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+import drive_db
+
+# OAuth 2.0 scopes for file creation
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
+def get_oauth_service():
+    creds = None
+    # Load saved token
+    if os.path.exists("token.pickle"):
+        with open("token.pickle","rb") as f:
+            creds = pickle.load(f)
+    # Refresh or do full flow
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "oauth_client.json", SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        with open("token.pickle","wb") as f:
+            pickle.dump(creds, f)
+    return build("drive", "v3", credentials=creds)
+
+# Initialize Drive DB with OAuth
+drive_service = get_oauth_service()
+drive_db.init_with_oauth(drive_service)
 
 # ─── Monkey‐patch requests.get to support local files ─────────────────────────
 import os
