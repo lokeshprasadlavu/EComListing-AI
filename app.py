@@ -148,7 +148,7 @@ up_csv  = st.file_uploader("Upload Products CSV", type="csv")
 up_json = st.file_uploader("Upload Images JSON", type="json")
 
 if st.button("Run Batch"):
-    if not up_csv:
+    if not all([up_csv, up_json]):
         st.error("Please upload Products CSV and Images JSON files.")
     else:
         # Load & normalize master CSV & JSON once
@@ -179,7 +179,7 @@ if st.button("Run Batch"):
             # Now per-product, use a fresh tempdir for outputs
             for _, row in df.iterrows():
                 lid, pid, title = row["Listing Id"], row["Product Id"], row["Title"]
-                st.subheader(f"Product Video of {title}…")
+                st.subheader(f"Product Video of {title}")
 
                 # Each product gets its own workspace
                 with tempfile.TemporaryDirectory() as prod_tmp:
