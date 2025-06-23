@@ -93,11 +93,11 @@ vgs.fonts_folder   = preload_fonts(fonts_id)
 vgs.logo, vgs.logo_path, vgs.logo_width, vgs.logo_height = preload_logo(logo_id)
 
 # ─── Mode selector ───────────────────────────────────────────────────────────
-mode = st.sidebar.radio("Mode", ["Product Video Generation", "Product Video & Blog Generation from a Batch of Products"])
+mode = st.sidebar.radio("Mode", ["Generate Video for a Single Product", "Generate Video & Blog for a Batch of Products"])
 
 # ─── Single Product ──────────────────────────────────────────────────────────
-if mode == "Product Video Generation":
-    st.header("Product Video Generation")
+if mode == "Generate Video for a Single Product":
+    st.header("Generate Video for a Single Product")
     listing_id  = st.text_input("Listing ID")
     product_id  = st.text_input("Product ID")
     title       = st.text_input("Product Title")
@@ -150,7 +150,7 @@ if mode == "Product Video Generation":
 
 # ─── Batch from CSV Mode ─────────────────────────────────────────────────────
 else:
-    st.header("Product Video & Blog Generation from a Batch of Products")
+    st.header("Generate Video & Blog for a Batch of Products")
     up_csv  = st.file_uploader("Upload Products CSV", type="csv")
     up_json = st.file_uploader("Upload Images JSON", type="json")
 
