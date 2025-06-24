@@ -1,7 +1,7 @@
 # EComListing-AI
 
 An AI-powered multimedia content generation service for eCommerce product listings.  
-Turn your product catalog (CSV + JSON of image URLs) or single product inputs into polished videos, AI-written blogs, and text snippets—automatically uploaded to Google Drive (and soon YouTube).
+Turn your product catalog (CSV + JSON of image URLs) or single product inputs into polished videos, AI-written blogs, and text snippets automatically uploaded to Google Drive(DB) (and soon YouTube).
 
 ---
 
