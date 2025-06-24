@@ -90,7 +90,9 @@ EComListing-AI/
 
 
 4. **Run the Streamlit app**  
+   ```bash
    streamlit run app.py
+   ```
 
 ---
 
