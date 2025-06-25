@@ -1,0 +1,64 @@
+# io_utils.py
+
+import os
+import re
+import shutil
+import tempfile
+import zipfile
+from contextlib import contextmanager
+from typing import List
+import requests
+
+def ensure_dir(path: str):
+    """Create directory if it doesn’t exist."""
+    os.makedirs(path, exist_ok=True)
+    return path
+
+@contextmanager
+def temp_workspace():
+    """
+    Context manager that yields a fresh temporary directory
+    and cleans up on exit.
+    """
+    td = tempfile.mkdtemp()
+    try:
+        yield td
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+
+def download_images(image_urls: List[str], target_dir: str) -> List[str]:
+    """
+    Download each URL into target_dir and return list of local file paths.
+    Supports local file paths as well as HTTP URLs.
+    """
+    ensure_dir(target_dir)
+    local_paths = []
+    for url in image_urls:
+        filename = os.path.basename(url)
+        dest = os.path.join(target_dir, filename)
+        if os.path.isfile(url):
+            shutil.copy(url, dest)
+        else:
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+            with open(dest, "wb") as f:
+                f.write(resp.content)
+        local_paths.append(dest)
+    return local_paths
+
+def extract_fonts(zip_path: str, extract_to: str):
+    """
+    Unzip a font ZIP (e.g. Poppins.zip) into a folder.
+    Overwrites any existing files.
+    """
+    ensure_dir(extract_to)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(extract_to)
+    return extract_to
+
+def slugify(text: str) -> str:
+    """
+    Convert arbitrary text into a filesystem‐ and URL‐friendly slug.
+    """
+    s = re.sub(r'[^a-zA-Z0-9]+', '_', text)
+    return s.strip('_').lower()
