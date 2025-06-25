@@ -164,7 +164,14 @@ else:
                     output_base_folder=master_tmp,
                 )
 
-                generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
+                try:
+                    generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
+                except GenerationError as ge:
+                    st.error(str(ge))
+                    st.stop()
+                except Exception:
+                    st.error("⚠️ Batch generation failed unexpectedly. Please try again later.")
+                    st.stop()
 
                 for sub in os.listdir(master_tmp):
                     subdir = os.path.join(master_tmp, sub)
