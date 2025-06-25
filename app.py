@@ -65,7 +65,7 @@ logo_path    = preload_logo(logo_id)
 # ─── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
-st.markdown("AI‑Powered Multimedia Content for your eCommerce Listings.")
+st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
@@ -118,14 +118,17 @@ if mode == "Single Product":
 
                 # upload
                 prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
-                for path in [result.video_path, result.title_file, result.blog_file]:
-                    mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                    drive_db.upload_file(
-                        name=os.path.basename(path),
-                        data=open(path,'rb').read(),
-                        mime_type=mime,
-                        parent_id=prod_f
-                    )
+                try:
+                    for path in [result.video_path, result.title_file, result.blog_file]:
+                        mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
+                        drive_db.upload_file(
+                            name=os.path.basename(path),
+                            data=open(path,'rb').read(),
+                            mime_type=mime,
+                            parent_id=prod_f
+                        )
+                except Exception as e:
+                    st.warning(f"⚠️ Failed to upload to Database: {e}")
 
 # ─── Batch CSV Mode ──────────────────────────────────────────────────────────
 else:
@@ -164,12 +167,15 @@ else:
                     if os.path.exists(vid):  st.video(vid)
                     if os.path.exists(blog): st.write(open(blog,'r').read())
                     prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
-                    for path in glob.glob(os.path.join(subdir,'*')):
-                        if path.lower().endswith(('.mp4','.txt')):
-                            mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                            drive_db.upload_file(
-                                name=os.path.basename(path),
-                                data=open(path,'rb').read(),
-                                mime_type=mime,
-                                parent_id=prod_f
-                            )
+                    try:
+                        for path in glob.glob(os.path.join(subdir,'*')):
+                            if path.lower().endswith(('.mp4','.txt')):
+                                mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
+                                drive_db.upload_file(
+                                    name=os.path.basename(path),
+                                    data=open(path,'rb').read(),
+                                    mime_type=mime,
+                                    parent_id=prod_f
+                                )
+                    except Exception as e:
+                        st.warning(f"⚠️ Failed to upload to Database: {e}")

@@ -40,6 +40,10 @@ class GenerationResult:
     title_file: str
     blog_file: str
 
+class GenerationError(Exception):
+    """Raised when video/blog generation fails for a user-facing reason."""
+    pass
+
 
 def generate_for_single(
     cfg: ServiceConfig,
@@ -170,7 +174,7 @@ def _generate_transcript(title: str, description: str) -> str:
     prompt = (
         f"You are the world’s best script writer for product videos. "
         f"Write a one-minute voiceover script for:\nTitle: {title}\nDescription: {description}\n"
-        "End with 'Available on TrustClarity.com.'"
+        "End with 'Available on Our Website.'"
     )
     try:
         resp = openai.ChatCompletion.create(
@@ -179,9 +183,12 @@ def _generate_transcript(title: str, description: str) -> str:
             max_tokens=500
         )
         return resp.choices[0].message.content.strip()
+    except openai.error.RateLimitError:
+        raise GenerationError("❌ OpenAI quota exceeded – try again later.")
+    except openai.error.OpenAIError as e:
+        raise GenerationError(f"❌ Script generation failed: {e}")
     except Exception:
-        log.exception("OpenAI transcript generation failed")
-        return ""
+        raise GenerationError("❌ Unexpected error generating script – please retry.")
 
 
 def _assemble_video(
@@ -195,9 +202,12 @@ def _assemble_video(
     basename: str,
 ) -> str:
     # create narration audio
-    tts = gTTS(text=narration_text, lang="en")
-    audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
-    tts.save(audio_path)
+    try:
+        tts = gTTS(text=narration_text, lang="en")
+        audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
+        tts.save(audio_path)
+    except Exception as e:
+        raise GenerationError(f"❌ Voiceover generation failed: {e}")
     audio_clip = AudioFileClip(audio_path)
 
     # create image sequence clip
@@ -218,5 +228,10 @@ def _assemble_video(
 
     # write file
     out_path = os.path.join(workdir, f"{basename}.mp4")
-    final.write_videofile(out_path, codec="libx264", audio_codec="aac")
+    try:
+        final.write_videofile(out_path, codec="libx264", audio_codec="aac")
+    except OSError as e:
+        raise GenerationError(f"❌ Video encoding failed: {e}")
+    except Exception:
+        raise GenerationError("❌ Unexpected error during video rendering.")
     return out_path

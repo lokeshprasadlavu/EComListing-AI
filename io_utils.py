@@ -34,27 +34,37 @@ def download_images(image_urls: List[str], target_dir: str) -> List[str]:
     ensure_dir(target_dir)
     local_paths = []
     for url in image_urls:
-        filename = os.path.basename(url)
-        dest = os.path.join(target_dir, filename)
-        if os.path.isfile(url):
-            shutil.copy(url, dest)
-        else:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            with open(dest, "wb") as f:
-                f.write(resp.content)
-        local_paths.append(dest)
-    return local_paths
+        try:
+            filename = os.path.basename(url)
+            dest = os.path.join(target_dir, filename)
+            if os.path.isfile(url):
+                shutil.copy(url, dest)
+            else:
+                resp = requests.get(url, timeout=30)
+                resp.raise_for_status()
+                with open(dest, "wb") as f:
+                    f.write(resp.content)
+            local_paths.append(dest)
+        except Exception as e:
+            print(f"Warning: failed to download image {url}: {e}")
+        if not local_paths:
+            raise RuntimeError("All image downloads failed – please check your URLs or network.")
+        return local_paths
 
 def extract_fonts(zip_path: str, extract_to: str):
     """
     Unzip a font ZIP (e.g. Poppins.zip) into a folder.
     Overwrites any existing files.
     """
-    ensure_dir(extract_to)
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(extract_to)
-    return extract_to
+    try:
+        ensure_dir(extract_to)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(extract_to)
+        return extract_to
+    except zipfile.BadZipFile:
+        raise RuntimeError(f"Font archive is invalid or corrupted: {zip_file_path}")
+    except Exception as e:
+        raise RuntimeError(f"Could not extract fonts from {zip_file_path}: {e}")
 
 def slugify(text: str) -> str:
     """
