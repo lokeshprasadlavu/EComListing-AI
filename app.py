@@ -12,7 +12,7 @@ from config import load_config
 from auth import get_openai_client, init_drive_service
 import drive_db
 from io_utils import temp_workspace, extract_fonts, slugify
-from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig
+from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
 # ─── Load & validate config ─────────────────────────────────────────────────
 cfg = load_config()
@@ -102,14 +102,22 @@ if mode == "Single Product":
                     output_base_folder=tmpdir,
                 )
 
-                result = generate_for_single(
-                    cfg=svc_cfg,
-                    listing_id=None,
-                    product_id=None,
-                    title=title,
-                    description=description,
-                    image_urls=image_urls,
-                )
+                # Generate & catch errors
+                try:
+                    result = generate_for_single(
+                        cfg=svc_cfg,
+                        listing_id=None,
+                        product_id=None,
+                        title=title,
+                        description=description,
+                        image_urls=image_urls,
+                    )
+                except GenerationError as ge:
+                    st.error(str(ge))
+                    st.stop()
+                except Exception:
+                    st.error("⚠️ An unexpected error occurred. Please try again later.")
+                    st.stop()
 
                 st.subheader(title)
                 st.video(result.video_path)
@@ -160,16 +168,19 @@ else:
 
                 for sub in os.listdir(master_tmp):
                     subdir = os.path.join(master_tmp, sub)
-                    if not os.path.isdir(subdir): continue
+                    if not os.path.isdir(subdir): 
+                        continue
+
                     st.subheader(f"Results for {sub}")
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
+
                     if os.path.exists(vid):  st.video(vid)
                     if os.path.exists(blog): st.write(open(blog,'r').read())
                     prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
-                    try:
-                        for path in glob.glob(os.path.join(subdir,'*')):
-                            if path.lower().endswith(('.mp4','.txt')):
+                    for path in glob.glob(os.path.join(subdir,'*')):
+                        if path.lower().endswith(('.mp4','.txt')):
+                            try:
                                 mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
                                 drive_db.upload_file(
                                     name=os.path.basename(path),
@@ -177,5 +188,5 @@ else:
                                     mime_type=mime,
                                     parent_id=prod_f
                                 )
-                    except Exception as e:
-                        st.warning(f"⚠️ Failed to upload to Database: {e}")
+                            except Exception as e:
+                                st.warning(f"⚠️ Failed to upload to Database: {e}")
