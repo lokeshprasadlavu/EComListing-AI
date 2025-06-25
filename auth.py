@@ -43,7 +43,7 @@ def init_drive_service(
             },
             scopes=DRIVE_SCOPES
         )
-        return build("drive", "v3", credentials=creds)
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
 
     if oauth_cfg:
         token_path = ".streamlit/drive_token.pickle"
@@ -79,7 +79,7 @@ def init_drive_service(
             with open(token_path, "wb") as f:
                 pickle.dump(creds, f)
 
-        return build("drive", "v3", credentials=creds)
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
 
     raise ValueError("Must provide either OAuthConfig or ServiceAccountConfig to init drive.")
 
