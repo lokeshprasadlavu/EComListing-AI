@@ -85,7 +85,6 @@ images_json_schema = {
             "productId":   {"type": ["integer", "string"]},
             "images": {
                 "type": "array",
-                "minItems": 1,
                 "items": {
                     "type": "object",
                     "required": ["imageURL"],
