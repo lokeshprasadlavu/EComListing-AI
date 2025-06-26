@@ -146,37 +146,94 @@ if mode == "Single Product":
 else:
     st.header("Generate Video & Blog for a Batch of Products")
     up_csv  = st.file_uploader("Upload Products CSV", type="csv")
-    up_json = st.file_uploader("Upload Images JSON", type="json")
+    up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
-        if not all([up_csv, up_json]):
-            st.error("Please upload both CSV and JSON.")
-        else:
-            with temp_workspace() as master_tmp:
-                csv_path  = os.path.join(master_tmp, up_csv.name)
-                json_path = os.path.join(master_tmp, up_json.name)
-                open(csv_path,'wb').write(up_csv.getbuffer())
-                open(json_path,'wb').write(up_json.getbuffer())
-                images_data = json.load(open(json_path))
+        # CSV must be present
+        if not up_csv:
+            st.error("🛑 Please upload a Products CSV.")
+            st.stop()
 
-                svc_cfg = ServiceConfig(
-                    csv_file=csv_path,
-                    images_json=json_path,
-                    audio_folder=master_tmp,
-                    fonts_zip_path=fonts_folder,
-                    logo_path=logo_path,
-                    output_base_folder=master_tmp,
-                )
+        # Load CSV
+        with temp_workspace() as master_tmp:
+            # Save & read CSV
+            csv_path = os.path.join(master_tmp, up_csv.name)
+            with open(csv_path, "wb") as f:
+                f.write(up_csv.getbuffer())
+            df = pd.read_csv(csv_path)
+            df.columns = [c.strip() for c in df.columns]
+
+            # Validate mandatory columns
+            required_cols = {"Listing Id", "Product Id", "Title", "Description"}
+            missing = required_cols - set(df.columns)
+            if missing:
+                st.error(f"🛑 CSV is missing required column(s): {', '.join(missing)}")
+                st.stop()
+
+            # Detect an image-URL column in CSV
+            img_col = next(
+                (c for c in df.columns if "image" in c.lower() and "url" in c.lower()),
+                None
+            )
+
+            # If no CSV image column, require JSON
+            images_data = []
+            if img_col is None:
+                if not up_json:
+                    st.error(
+                        "🛑 Please upload a CSV with a product-image-URL column, "
+                        "or upload a valid Images JSON."
+                    )
+                    st.stop()
+
+                # Load & validate JSON
+                json_path = os.path.join(master_tmp, up_json.name)
+                with open(json_path, "wb") as f:
+                    f.write(up_json.getbuffer())
 
                 try:
-                    generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
-                except GenerationError as ge:
-                    st.error(str(ge))
-                    st.stop()
-                except Exception:
-                    st.error("⚠️ Batch generation failed unexpectedly. Please try again later.")
+                    images_data = json.load(open(json_path))
+                except Exception as e:
+                    st.error(f"🛑 Uploaded Images JSON is not valid JSON: {e}")
                     st.stop()
 
+                # JSON structure checks
+                if not isinstance(images_data, list):
+                    st.error("🛑 Images JSON must be a list of entries.")
+                    st.stop()
+
+                for entry in images_data:
+                    if not all(k in entry for k in ("listingId","productId","images")):
+                        st.error("🛑 Each JSON entry must have 'listingId', 'productId', and 'images'.")
+                        st.stop()
+                    if not isinstance(entry["images"], list):
+                        st.error("🛑 In JSON, 'images' must be an array.")
+                        st.stop()
+                    for img in entry["images"]:
+                        if "imageURL" not in img:
+                            st.error("🛑 Each image object in JSON must contain 'imageURL'.")
+                            st.stop()
+
+            # Build and run the batch
+            svc_cfg = ServiceConfig(
+                csv_file=csv_path,
+                images_json=(json_path if img_col is None else ""),
+                audio_folder=master_tmp,
+                fonts_zip_path=fonts_folder,
+                logo_path=logo_path,
+                output_base_folder=master_tmp,
+            )
+
+            try:
+                generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
+            except GenerationError as ge:
+                st.error(f"⚠️ Generation failed: {ge}")
+                st.stop()
+            except Exception:
+                st.error("⚠️ Batch generation encountered an unexpected error. Please try again later.")
+                st.stop()
+
+                
                 for sub in os.listdir(master_tmp):
                     subdir = os.path.join(master_tmp, sub)
                     if not os.path.isdir(subdir): 

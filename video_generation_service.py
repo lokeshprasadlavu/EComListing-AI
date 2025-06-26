@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from typing import List, Dict, Optional
@@ -113,36 +114,66 @@ def generate_for_single(
 
 def generate_batch_from_csv(
     cfg: ServiceConfig,
-    images_data: List[Dict],
+    images_data: Optional[List[Dict]] = None,
 ) -> None:
     """
-    Process a batch by reading cfg.csv_file and cfg.images_json.
-    Calls generate_for_single for each entry, organizes outputs.
+    Process a batch by reading cfg.csv_file and optional cfg.images_json.
+    Validates CSV columns and either CSV URL column or JSON images.
     """
+    # Load CSV
+    if not os.path.exists(cfg.csv_file):
+        raise GenerationError(f"CSV file not found: {cfg.csv_file}")
     df = pd.read_csv(cfg.csv_file)
     df.columns = [c.strip() for c in df.columns]
-    # build image lookup
-    image_map = {
-        (e['listingId'], e['productId']): [img['imageURL'] for img in e.get('images', [])]
-        for e in images_data
-        if e.get('listingId') and e.get('productId')
-    }
 
+    # Required columns
+    required = ['Listing Id', 'Product Id', 'Title', 'Description']
+    missing = [c for c in required if c not in df.columns]
+    # Detect URL column if any
+    url_col = next((c for c in df.columns if 'image' in c.lower() and 'url' in c.lower()), None)
+
+    if missing:
+        raise GenerationError(f"CSV missing required columns: {', '.join(missing)}")
+    if not url_col and not images_data:
+        raise GenerationError(
+            "❌ No image URLs in CSV and no JSON provided. "
+            "Please include a CSV column of image URLs or upload a valid JSON with images."
+        )
+
+    # Validate JSON if provided
+    image_map = {}
+    if images_data:
+        for entry in images_data:
+            if not all(k in entry for k in ('listingId', 'productId', 'images')):
+                raise GenerationError(
+                    "❌ Invalid JSON: each item must have 'listingId', 'productId', and 'images' list."
+                )
+            key = (entry['listingId'], entry['productId'])
+            urls = [img.get('imageURL') for img in entry['images'] if img.get('imageURL')]
+            image_map[key] = urls
+
+    # Iterate and generate
     for _, row in df.iterrows():
-        lid = row.get('Listing Id')
-        pid = row.get('Product Id')
-        title = row.get('Title', '')
-        desc = row.get('Description', '')
+        lid, pid = row['Listing Id'], row['Product Id']
+        title, desc = row['Title'], row['Description']
         key = (lid, pid)
 
-        if key not in image_map:
-            log.warning(f"Skipping {lid}/{pid}: no images")
+        # Get URLs from JSON map
+        urls = image_map.get(key, [])
+        # Fallback to CSV URL column
+        if not urls and url_col:
+            raw = str(row[url_col] or "")
+            parts = [u.strip() for u in raw.split(',')]
+            urls = [u for u in parts if re.search(r'\.(png|jpe?g)(\?|$)', u, re.IGNORECASE)]
+
+        if not urls:
+            log.warning(f"Skipping {lid}/{pid}: no valid image URLs")
             continue
         if not title or not desc:
             log.warning(f"Skipping {lid}/{pid}: missing title/description")
             continue
 
-        # create per-product workspace
+        # Workspace & call single
         with temp_workspace() as tmp:
             svc_cfg = ServiceConfig(
                 csv_file=cfg.csv_file,
@@ -152,22 +183,26 @@ def generate_batch_from_csv(
                 logo_path=cfg.logo_path,
                 output_base_folder=cfg.output_base_folder,
             )
-            # generate single
-            result = generate_for_single(
-                cfg=svc_cfg,
-                listing_id=str(lid),
-                product_id=str(pid),
-                title=str(title),
-                description=str(desc),
-                image_urls=image_map[key],
-            )
-            # move outputs to final folder
+            try:
+                result = generate_for_single(
+                    cfg=svc_cfg,
+                    listing_id=str(lid),
+                    product_id=str(pid),
+                    title=str(title),
+                    description=str(desc),
+                    image_urls=urls,
+                )
+            except GenerationError as ge:
+                log.error(f"{lid}/{pid} failed: {ge}")
+                continue
+
+            # Copy outputs
             dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")
             os.makedirs(dest, exist_ok=True)
-            shutil.copy(result.video_path, os.path.join(dest, os.path.basename(result.video_path)))
-            shutil.copy(result.blog_file,  os.path.join(dest, os.path.basename(result.blog_file)))
-            shutil.copy(result.title_file, os.path.join(dest, os.path.basename(result.title_file)))
+            for path in (result.video_path, result.blog_file, result.title_file):
+                shutil.copy(path, os.path.join(dest, os.path.basename(path)))
             log.info(f"Saved outputs for {lid}/{pid} to {dest}")
+
 
 
 def _generate_transcript(title: str, description: str) -> str:
