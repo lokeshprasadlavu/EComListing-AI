@@ -74,15 +74,16 @@ def slugify(text: str) -> str:
     s = re.sub(r'[^a-zA-Z0-9]+', '_', text)
     return s.strip('_').lower()
 
-# JSON schema for your images_data array
-images_json_schema = {
-    "type": "array",
-    "items": {
+def validate_images_json(data):
+    if not isinstance(data, list):
+        raise ValidationError("Top level JSON must be a list of entries.")
+
+    item_schema = {
         "type": "object",
         "required": ["listingId", "productId", "images"],
         "properties": {
-            "listingId":   {"type": ["integer", "string"]},
-            "productId":   {"type": ["integer", "string"]},
+            "listingId": {"type": "number"},
+            "productId": {"type": "number"},
             "images": {
                 "type": "array",
                 "minItems": 1,
@@ -90,10 +91,10 @@ images_json_schema = {
                     "type": "object",
                     "required": ["imageURL"],
                     "properties": {
-                        "imageURL":      {"type": "string", "format": "uri"},
+                        "imageURL": {"type": "string", "format": "uri"},
                         "imageFilename": {"type": "string"},
-                        "thumbURL":      {"type": "string", "format": "uri"},
-                        "imageKey":      {"type": "string"}
+                        "thumbURL": {"type": "string"},
+                        "imageKey": {"type": "string"},
                     },
                     "additionalProperties": True
                 }
@@ -101,18 +102,10 @@ images_json_schema = {
         },
         "additionalProperties": True
     }
-}
 
-
-def validate_images_json(data):
-    """Raises ValidationError on first failure."""
-    if not isinstance(data, list):
-        raise ValidationError("Top level JSON must be an array of entries.")
-
-    item_schema = images_json_schema["items"]
+    validator = Draft7Validator(item_schema)
     for idx, entry in enumerate(data, start=1):
-        validator = Draft7Validator(images_json_schema)
-        errors = list(validator.iter_errors(data))
+        errors = list(validator.iter_errors(entry))
         if errors:
             e = errors[0]
             path = ".".join(str(p) for p in e.path) or "<entry>"
