@@ -218,8 +218,8 @@ def _generate_transcript(title: str, description: str) -> str:
             max_tokens=500
         )
         return resp.choices[0].message.content.strip()
-    except openai.error.RateLimitError:
-        raise GenerationError("❌ OpenAI Error: {e}")
+    except openai.error.RateLimitError as e:
+        raise GenerationError(f"❌ OpenAI Error: {e}")
     except openai.error.OpenAIError as e:
         raise GenerationError(f"❌ Script generation failed: {e}")
     except Exception:
