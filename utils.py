@@ -109,8 +109,9 @@ def validate_images_json(data):
     if not isinstance(data, list):
         raise ValidationError("Top level JSON must be an array of entries.")
 
-    validator = Draft7Validator(images_json_schema)
+    item_schema = images_json_schema["items"]
     for idx, entry in enumerate(data, start=1):
+        validator = Draft7Validator(images_json_schema)
         errors = list(validator.iter_errors(data))
         if errors:
             e = errors[0]
