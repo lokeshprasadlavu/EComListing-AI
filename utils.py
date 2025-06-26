@@ -8,7 +8,7 @@ import zipfile
 from contextlib import contextmanager
 from typing import List
 import requests
-from jsonschema import validate, ValidationError
+from jsonschema import validate, Draft7Validator, ValidationError
 
 def ensure_dir(path: str):
     """Create directory if it doesn’t exist."""
@@ -85,6 +85,7 @@ images_json_schema = {
             "productId":   {"type": ["integer", "string"]},
             "images": {
                 "type": "array",
+                "minItems": 1,
                 "items": {
                     "type": "object",
                     "required": ["imageURL"],
@@ -104,17 +105,14 @@ images_json_schema = {
 
 
 def validate_images_json(data):
-    # 1) Must be a list
+    """Raises ValidationError on first failure."""
     if not isinstance(data, list):
         raise ValidationError("Top level JSON must be an array of entries.")
-    try:
-        # 2) Validate the *whole* structure at once
-        validate(instance=data, schema=images_json_schema)
-    except ValidationError as e:
-        # build a friendly path string
-        # e.absolute_path is a deque of the keys/indexes leading to the failure
-        path = ".".join(str(p) for p in e.absolute_path) or "<root>"
-        raise ValidationError(f"Invalid Images JSON at '{path}': {e.message}")
 
-    # if we get here, everything (including multiple images) is good
-    return data
+    validator = Draft7Validator(images_json_schema)
+    errors = list(validator.iter_errors(data))
+    if errors:
+        e = errors[0]
+        idx = e.path[0] if e.path else "<unknown>"
+        path = ".".join(str(p) for p in e.path) or "<entry>"
+        raise ValidationError(f"Entry #{idx + 1} at '{path}': {e.message}")
