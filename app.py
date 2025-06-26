@@ -193,12 +193,12 @@ else:
 
                 images_data = json.load(open(json_path))
 
+                # validation
                 try:
                     validate_images_json(images_data)
                 except ValidationError as e:
-                    st.error(f"❌ Invalid Images JSON: {e.message}")
+                    st.error(f"❌ Invalid Images JSON: {e}")
                     st.stop()
-
 
             # Build and run the batch
             svc_cfg = ServiceConfig(

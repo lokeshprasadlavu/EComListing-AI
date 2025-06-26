@@ -8,7 +8,7 @@ import zipfile
 from contextlib import contextmanager
 from typing import List
 import requests
-from jsonschema import validate, ValidationError
+from jsonschema import validate, Draft7Validator, ValidationError
 
 def ensure_dir(path: str):
     """Create directory if it doesn’t exist."""
@@ -75,24 +75,14 @@ def slugify(text: str) -> str:
     return s.strip('_').lower()
 
 # JSON schema for your images_data array
-IMAGE_JSON_SCHEMA = {
+images_json_schema = {
     "type": "array",
     "items": {
         "type": "object",
         "required": ["listingId", "productId", "images"],
         "properties": {
-            "listingId": {
-                "oneOf": [
-                    {"type": "integer"},
-                    {"type": "string", "pattern": r"^\d+$"}
-                ]
-            },
-            "productId": {
-                "oneOf": [
-                    {"type": "integer"},
-                    {"type": "string", "pattern": r"^\d+$"}
-                ]
-            },
+            "listingId":   {"type": ["integer", "string"]},
+            "productId":   {"type": ["integer", "string"]},
             "images": {
                 "type": "array",
                 "minItems": 1,
@@ -100,7 +90,10 @@ IMAGE_JSON_SCHEMA = {
                     "type": "object",
                     "required": ["imageURL"],
                     "properties": {
-                        "imageURL": {"type": "string", "format": "uri"}
+                        "imageURL":      {"type": "string", "format": "uri"},
+                        "imageFilename": {"type": "string"},
+                        "thumbURL":      {"type": "string", "format": "uri"},
+                        "imageKey":      {"type": "string"}
                     },
                     "additionalProperties": True
                 }
@@ -112,8 +105,15 @@ IMAGE_JSON_SCHEMA = {
 
 
 def validate_images_json(data):
-    """
-    Raises a jsonschema.ValidationError if `data` does not conform
-    to IMAGE_JSON_SCHEMA.
-    """
-    validate(instance=data, schema=IMAGE_JSON_SCHEMA)
+    """Raises ValidationError on first failure."""
+    if not isinstance(data, list):
+        raise ValidationError("Top‐level JSON must be an array of entries.")
+    validator = Draft7Validator(images_json_schema["items"])
+    for idx, entry in enumerate(data, start=1):
+        errors = list(validator.iter_errors(entry))
+        if errors:
+            # pick the first error for clarity
+            e = errors[0]
+            # build a human path: e.path is a deque
+            path = ".".join(str(p) for p in e.path) or "<entry>"
+            raise ValidationError(f"Entry #{idx} at '{path}': {e.message}")
