@@ -30,9 +30,13 @@ with st.spinner("Connecting to Drive…"):
         st.error(f"Drive initialization error: {e}")
         st.stop()
 
-outputs_id = drive_db.find_or_create_folder("outputs", parent_id=cfg.drive_folder_id)
-fonts_id   = drive_db.find_or_create_folder("fonts",   parent_id=cfg.drive_folder_id)
-logo_id    = drive_db.find_or_create_folder("logo",    parent_id=cfg.drive_folder_id)
+try:
+    outputs_id = drive_db.find_or_create_folder("outputs", parent_id=cfg.drive_folder_id)
+    fonts_id   = drive_db.find_or_create_folder("fonts",   parent_id=cfg.drive_folder_id)
+    logo_id    = drive_db.find_or_create_folder("logo",    parent_id=cfg.drive_folder_id)
+except Exception as e:
+    st.error(f"⚠️ Database setup failed: {e}")
+    st.stop()
 
 # ─── Preload fonts & logo ─────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
