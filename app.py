@@ -189,6 +189,7 @@ else:
                 json_path = os.path.join(master_tmp, up_json.name)
                 with open(json_path, "wb") as f:
                     f.write(up_json.getbuffer())
+                st.write("DEBUG raw JSON type:", type(json), "— first element:", json[0] if isinstance(json, list) and json else json)
 
                 try:
                     images_data = json.load(open(json_path))
@@ -198,19 +199,19 @@ else:
 
                 # JSON structure checks
                 if not isinstance(images_data, list):
-                    st.error("📃 Images JSON must be a list of entries.")
+                    st.error("❌ Invalid JSON: a list of each item must have 'listingId', 'productId', and 'images' list.")
                     st.stop()
 
                 for entry in images_data:
                     if not all(k in entry for k in ("listingId","productId","images")):
-                        st.error("📃 Each JSON entry must have 'listingId', 'productId', and 'images'.")
+                        st.error("❌ Invalid JSON: Each JSON entry must have 'listingId', 'productId', and 'images'.")
                         st.stop()
                     if not isinstance(entry["images"], list):
-                        st.error("📃 In JSON, 'images' must be an array.")
+                        st.error("❌ Invalid JSON: 'images' must be an array.")
                         st.stop()
                     for img in entry["images"]:
                         if "imageURL" not in img:
-                            st.error("📃 Each image object in JSON must contain 'imageURL'.")
+                            st.error("❌ Invalid JSON: Each image object in JSON must contain 'imageURL'.")
                             st.stop()
 
             # Build and run the batch
