@@ -195,8 +195,6 @@ else:
                 except Exception as e:
                     st.error(f"❌ Uploaded Images JSON is not valid JSON: {e}")
                     st.stop()
-                st.write("DEBUG images_data type:", type(images_data))
-                st.write("DEBUG first JSON entry:", images_data[0], "type:", type(images_data[0]))
 
                 # JSON structure checks
                 if not isinstance(images_data, list):
