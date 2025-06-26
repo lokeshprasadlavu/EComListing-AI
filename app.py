@@ -198,11 +198,11 @@ else:
 
                 # JSON structure checks
                 if not isinstance(images_data, list):
-                    st.write("DEBUG raw JSON type:", type(images_data), "– first element:", images_data[0] if isinstance(images_data, list) else images_data)
                     st.error("❌ Invalid JSON: a list of each item must have 'listingId', 'productId', and 'images' list.")
                     st.stop()
 
                 for entry in images_data:
+                    st.write("DEBUG raw JSON type:", type(images_data), "– first element:", images_data[0] if isinstance(images_data, list) else images_data)
                     if not all(k in entry for k in ("listingId","productId","images")):
                         st.error("❌ Invalid JSON: Each JSON entry must have 'listingId', 'productId', and 'images'.")
                         st.stop()
