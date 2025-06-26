@@ -186,12 +186,14 @@ else:
                     )
                     st.stop()
 
-                # Load & validate JSON
+                # Load JSON
                 json_path = os.path.join(master_tmp, up_json.name)
                 with open(json_path, "wb") as f:
                     f.write(up_json.getbuffer())
 
-                images_data = json.load(open(json_path))
+                # Proper JSON load
+                with open(json_path, "r", encoding="utf-8") as f:
+                    images_data = json.load(f)
 
                 # validation
                 try:

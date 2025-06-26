@@ -74,11 +74,9 @@ def slugify(text: str) -> str:
     s = re.sub(r'[^a-zA-Z0-9]+', '_', text)
     return s.strip('_').lower()
 
-def validate_images_json(data):
-    if not isinstance(data, list):
-        raise ValidationError("Top level JSON must be a list of entries.")
-
-    item_schema = {
+images_json_schema = {
+    "type": "array",
+    "items": {
         "type": "object",
         "required": ["listingId", "productId", "images"],
         "properties": {
@@ -86,7 +84,6 @@ def validate_images_json(data):
             "productId": {"type": "number"},
             "images": {
                 "type": "array",
-                "minItems": 1,
                 "items": {
                     "type": "object",
                     "required": ["imageURL"],
@@ -94,15 +91,21 @@ def validate_images_json(data):
                         "imageURL": {"type": "string", "format": "uri"},
                         "imageFilename": {"type": "string"},
                         "thumbURL": {"type": "string"},
-                        "imageKey": {"type": "string"},
+                        "imageKey": {"type": "string"}
                     },
                     "additionalProperties": True
-                }
+                },
+                "minItems": 1
             }
         },
         "additionalProperties": True
     }
+}
 
+def validate_images_json(data):
+    if not isinstance(data, list):
+        raise ValidationError("Top level JSON must be a list.")
+    item_schema = images_json_schema["items"]
     validator = Draft7Validator(item_schema)
     for idx, entry in enumerate(data, start=1):
         errors = list(validator.iter_errors(entry))
