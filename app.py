@@ -189,7 +189,6 @@ else:
                 json_path = os.path.join(master_tmp, up_json.name)
                 with open(json_path, "wb") as f:
                     f.write(up_json.getbuffer())
-                st.write("DEBUG raw JSON type:", type(json), "— first element:", json[0] if isinstance(json, list) and json else json)
 
                 try:
                     images_data = json.load(open(json_path))
@@ -199,6 +198,7 @@ else:
 
                 # JSON structure checks
                 if not isinstance(images_data, list):
+                    st.write("DEBUG raw JSON type:", type(images_data), "– first element:", images_data[0] if isinstance(images_data, list) else images_data)
                     st.error("❌ Invalid JSON: a list of each item must have 'listingId', 'productId', and 'images' list.")
                     st.stop()
 
