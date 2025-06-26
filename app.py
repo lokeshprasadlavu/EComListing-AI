@@ -202,8 +202,8 @@ else:
                     st.stop()
 
                 for entry in images_data:
-                    st.write("DEBUG raw JSON type:", type(images_data), "– first element:", images_data[0] if isinstance(images_data, list) else images_data)
                     if not all(k in entry for k in ("listingId","productId","images")):
+                        st.write("DEBUG raw JSON type:", type(entry), "– first element:", entry[0] if isinstance(entry, list) else entry)
                         st.error("❌ Invalid JSON: Each JSON entry must have 'listingId', 'productId', and 'images'.")
                         st.stop()
                     if not isinstance(entry["images"], list):
