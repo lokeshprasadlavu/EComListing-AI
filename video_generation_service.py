@@ -219,7 +219,7 @@ def _generate_transcript(title: str, description: str) -> str:
         )
         return resp.choices[0].message.content.strip()
     except openai.error.RateLimitError:
-        raise GenerationError("❌ OpenAI quota exceeded – try again later.")
+        raise GenerationError("❌ OpenAI Error: {e}")
     except openai.error.OpenAIError as e:
         raise GenerationError(f"❌ Script generation failed: {e}")
     except Exception:
