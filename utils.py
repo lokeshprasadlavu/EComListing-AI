@@ -81,8 +81,18 @@ IMAGE_JSON_SCHEMA = {
         "type": "object",
         "required": ["listingId", "productId", "images"],
         "properties": {
-            "listingId":   {"type": ["integer", "string"]},
-            "productId":   {"type": ["integer", "string"]},
+            "listingId": {
+                "oneOf": [
+                    {"type": "integer"},
+                    {"type": "string", "pattern": r"^\d+$"}
+                ]
+            },
+            "productId": {
+                "oneOf": [
+                    {"type": "integer"},
+                    {"type": "string", "pattern": r"^\d+$"}
+                ]
+            },
             "images": {
                 "type": "array",
                 "minItems": 1,
@@ -90,10 +100,7 @@ IMAGE_JSON_SCHEMA = {
                     "type": "object",
                     "required": ["imageURL"],
                     "properties": {
-                        "imageURL":      {"type": "string", "format": "uri"},
-                        "imageFilename": {"type": "string"},
-                        "thumbURL":      {"type": "string", "format": "uri"},
-                        "imageKey":      {"type": "string"}
+                        "imageURL": {"type": "string", "format": "uri"}
                     },
                     "additionalProperties": True
                 }
