@@ -151,7 +151,7 @@ else:
     if st.button("Run Batch"):
         # CSV must be present
         if not up_csv:
-            st.error("🛑 Please upload a Products CSV.")
+            st.error("📂 Please upload a Products CSV.")
             st.stop()
 
         # Load CSV
@@ -167,7 +167,7 @@ else:
             required_cols = {"Listing Id", "Product Id", "Title", "Description"}
             missing = required_cols - set(df.columns)
             if missing:
-                st.error(f"🛑 CSV is missing required column(s): {', '.join(missing)}")
+                st.error(f"❌ CSV is missing required column(s): {', '.join(missing)}")
                 st.stop()
 
             # Detect an image-URL column in CSV
@@ -181,8 +181,7 @@ else:
             if img_col is None:
                 if not up_json:
                     st.error(
-                        "🛑 Please upload a CSV with a product-image-URL column, "
-                        "or upload a valid Images JSON."
+                        "📂 Please upload a CSV with a product images URLs column or upload a valid Images JSON."
                     )
                     st.stop()
 
@@ -194,24 +193,24 @@ else:
                 try:
                     images_data = json.load(open(json_path))
                 except Exception as e:
-                    st.error(f"🛑 Uploaded Images JSON is not valid JSON: {e}")
+                    st.error(f"❌ Uploaded Images JSON is not valid JSON: {e}")
                     st.stop()
 
                 # JSON structure checks
                 if not isinstance(images_data, list):
-                    st.error("🛑 Images JSON must be a list of entries.")
+                    st.error("📃 Images JSON must be a list of entries.")
                     st.stop()
 
                 for entry in images_data:
                     if not all(k in entry for k in ("listingId","productId","images")):
-                        st.error("🛑 Each JSON entry must have 'listingId', 'productId', and 'images'.")
+                        st.error("📃 Each JSON entry must have 'listingId', 'productId', and 'images'.")
                         st.stop()
                     if not isinstance(entry["images"], list):
-                        st.error("🛑 In JSON, 'images' must be an array.")
+                        st.error("📃 In JSON, 'images' must be an array.")
                         st.stop()
                     for img in entry["images"]:
                         if "imageURL" not in img:
-                            st.error("🛑 Each image object in JSON must contain 'imageURL'.")
+                            st.error("📃 Each image object in JSON must contain 'imageURL'.")
                             st.stop()
 
             # Build and run the batch
