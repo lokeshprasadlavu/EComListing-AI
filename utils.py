@@ -8,6 +8,7 @@ import zipfile
 from contextlib import contextmanager
 from typing import List
 import requests
+from jsonschema import validate, ValidationError
 
 def ensure_dir(path: str):
     """Create directory if it doesn’t exist."""
@@ -62,9 +63,9 @@ def extract_fonts(zip_path: str, extract_to: str):
             zf.extractall(extract_to)
         return extract_to
     except zipfile.BadZipFile:
-        raise RuntimeError(f"Font archive is invalid or corrupted: {zip_file_path}")
+        raise RuntimeError(f"Font archive is invalid or corrupted: {zip_path}")
     except Exception as e:
-        raise RuntimeError(f"Could not extract fonts from {zip_file_path}: {e}")
+        raise RuntimeError(f"Could not extract fonts from {zip_path}: {e}")
 
 def slugify(text: str) -> str:
     """
@@ -72,3 +73,40 @@ def slugify(text: str) -> str:
     """
     s = re.sub(r'[^a-zA-Z0-9]+', '_', text)
     return s.strip('_').lower()
+
+# JSON schema for your images_data array
+IMAGE_JSON_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["listingId", "productId", "images"],
+        "properties": {
+            "listingId":   {"type": ["integer", "string"]},
+            "productId":   {"type": ["integer", "string"]},
+            "images": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": ["imageURL"],
+                    "properties": {
+                        "imageURL":      {"type": "string", "format": "uri"},
+                        "imageFilename": {"type": "string"},
+                        "thumbURL":      {"type": "string", "format": "uri"},
+                        "imageKey":      {"type": "string"}
+                    },
+                    "additionalProperties": True
+                }
+            }
+        },
+        "additionalProperties": True
+    }
+}
+
+
+def validate_images_json(data):
+    """
+    Raises a jsonschema.ValidationError if `data` does not conform
+    to IMAGE_JSON_SCHEMA.
+    """
+    validate(instance=data, schema=IMAGE_JSON_SCHEMA)

@@ -19,7 +19,7 @@ from moviepy.editor import (
 )
 from gtts import gTTS
 
-from io_utils import download_images, temp_workspace, slugify
+from utils import download_images, temp_workspace, slugify, validate_images_json
 
 # Configure module-level logger
 logging.basicConfig(level=logging.INFO)
@@ -141,15 +141,16 @@ def generate_batch_from_csv(
         )
 
     # Validate JSON if provided
-    image_map = {}
+    image_map: Dict[tuple, List[str]] = {}
     if images_data:
+        try:
+            validate_images_json(images_data)
+        except Exception as e:
+            raise GenerationError(f"❌ Invalid images JSON: {e}")
+
         for entry in images_data:
-            if not all(k in entry for k in ('listingId', 'productId', 'images')):
-                raise GenerationError(
-                    "❌ Invalid JSON: each item must have 'listingId', 'productId', and 'images' list."
-                )
             key = (entry['listingId'], entry['productId'])
-            urls = [img.get('imageURL') for img in entry['images'] if img.get('imageURL')]
+            urls = [img['imageURL'] for img in entry['images']]
             image_map[key] = urls
 
     # Iterate and generate
@@ -193,7 +194,7 @@ def generate_batch_from_csv(
                     image_urls=urls,
                 )
             except GenerationError as ge:
-                log.error(f"{lid}/{pid} failed: {ge}")
+                log.error(f"{lid}/{pid} generation failed: {ge}")
                 continue
 
             # Copy outputs

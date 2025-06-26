@@ -11,8 +11,9 @@ import pandas as pd
 from config import load_config
 from auth import get_openai_client, init_drive_service
 import drive_db
-from io_utils import temp_workspace, extract_fonts, slugify
+from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
+from jsonschema import ValidationError
 
 # ─── Load & validate config ─────────────────────────────────────────────────
 cfg = load_config()
@@ -190,42 +191,14 @@ else:
                 with open(json_path, "wb") as f:
                     f.write(up_json.getbuffer())
 
+                images_data = json.load(open(json_path))
+
                 try:
-                    images_data = json.load(open(json_path))
-                except Exception as e:
-                    st.error(f"❌ Uploaded Images JSON is not valid JSON: {e}")
+                    validate_images_json(images_data)
+                except ValidationError as e:
+                    st.error(f"❌ Invalid Images JSON: {e.message}")
                     st.stop()
 
-                # JSON structure checks
-                if not isinstance(images_data, list):
-                    st.error("❌ Invalid JSON: a list of each item must have 'listingId', 'productId', and 'images' list.")
-                    st.stop()
-
-                for entry in images_data:
-                    # Must be a dict
-                    if not isinstance(entry, dict):
-                        st.error("❌ Invalid JSON: each entry must be an object.")
-                        st.stop()
-
-                    # Check required keys
-                    missing = [k for k in ("listingId", "productId", "images") if k not in entry]
-                    if missing:
-                        st.error(f"❌ Invalid JSON: missing keys {', '.join(missing)} in an entry.")
-                        st.stop()
-
-                    # 'images' must be a list
-                    if not isinstance(entry["images"], list):
-                        st.error("❌ Invalid JSON: 'images' field must be a list.")
-                        st.stop()
-
-                    # Each image must be a dict containing 'imageURL'
-                    for img in entry["images"]:
-                        if not isinstance(img, dict):
-                            st.error("❌ Invalid JSON: each image must be an object.")
-                            st.stop()
-                        if "imageURL" not in img:
-                            st.error("❌ Invalid JSON: each image object must contain 'imageURL'.")
-                            st.stop()
 
             # Build and run the batch
             svc_cfg = ServiceConfig(
