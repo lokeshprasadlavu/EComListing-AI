@@ -203,16 +203,30 @@ else:
                     st.error("❌ Invalid JSON: a list of each item must have 'listingId', 'productId', and 'images' list.")
                     st.stop()
 
-                for entry in enumerate(images_data):
-                    if not all(k in entry for k in ("listingId","productId","images")):
-                        st.error("❌ Invalid JSON: Each JSON entry must have 'listingId', 'productId', and 'images'.")
+                for entry in images_data:
+                    # Must be a dict
+                    if not isinstance(entry, dict):
+                        st.error("❌ Invalid JSON: each entry must be an object.")
                         st.stop()
+
+                    # Check required keys
+                    missing = [k for k in ("listingId", "productId", "images") if k not in entry]
+                    if missing:
+                        st.error(f"❌ Invalid JSON: missing keys {', '.join(missing)} in an entry.")
+                        st.stop()
+
+                    # 'images' must be a list
                     if not isinstance(entry["images"], list):
-                        st.error("❌ Invalid JSON: 'images' must be an array.")
+                        st.error("❌ Invalid JSON: 'images' field must be a list.")
                         st.stop()
+
+                    # Each image must be a dict containing 'imageURL'
                     for img in entry["images"]:
+                        if not isinstance(img, dict):
+                            st.error("❌ Invalid JSON: each image must be an object.")
+                            st.stop()
                         if "imageURL" not in img:
-                            st.error("❌ Invalid JSON: Each image object in JSON must contain 'imageURL'.")
+                            st.error("❌ Invalid JSON: each image object must contain 'imageURL'.")
                             st.stop()
 
             # Build and run the batch
