@@ -110,9 +110,9 @@ def validate_images_json(data):
         raise ValidationError("Top level JSON must be an array of entries.")
 
     validator = Draft7Validator(images_json_schema)
-    errors = list(validator.iter_errors(data))
-    if errors:
-        e = errors[0]
-        idx = e.path[0] if e.path else "<unknown>"
-        path = ".".join(str(p) for p in e.path) or "<entry>"
-        raise ValidationError(f"Entry #{idx + 1} at '{path}': {e.message}")
+    for idx, entry in enumerate(data, start=1):
+        errors = list(validator.iter_errors(data))
+        if errors:
+            e = errors[0]
+            path = ".".join(str(p) for p in e.path) or "<entry>"
+            raise ValidationError(f"Entry #{idx} at '{path}': {e.message}")
