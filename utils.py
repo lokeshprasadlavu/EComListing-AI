@@ -103,7 +103,34 @@ images_json_schema = {
 }
 
 def validate_images_json(data):
-    try:
-        validate(instance=data, schema=images_json_schema)
-    except ValidationError as e:
-        raise ValidationError(f"❌ Invalid Images JSON: {e.message}")
+    from utils import images_json_schema  # if your schema is there
+
+    if not isinstance(data, list):
+        raise ValidationError("❌ Invalid JSON")
+
+    validator = Draft7Validator(images_json_schema["items"])
+
+    for idx, entry in enumerate(data):
+        errors = list(validator.iter_errors(entry))
+        if errors:
+            e = errors[0]
+
+            # Try to fetch listingId/productId from the faulty entry
+            lid = entry.get("listingId")
+            pid = entry.get("productId")
+
+            # If not present, fallback to adjacent valid entries
+            if not lid or not pid:
+                if idx > 0:
+                    prev = data[idx - 1]
+                    lid = lid or prev.get("listingId")
+                    pid = pid or prev.get("productId")
+                elif idx + 1 < len(data):
+                    nxt = data[idx + 1]
+                    lid = lid or nxt.get("listingId")
+                    pid = pid or nxt.get("productId")
+
+            # Build a readable location hint
+            loc = f"listingId={lid}, productId={pid}" if lid or pid else f"entry #{idx + 1}"
+
+            raise ValidationError(f"❌ Invalid JSON at {loc}: {e.message}")
