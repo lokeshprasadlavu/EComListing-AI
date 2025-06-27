@@ -73,39 +73,13 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# State defaults
+# ----------------- SESSION STATE ------------------
 if "render_choice" not in st.session_state:
     st.session_state["render_choice"] = "Video + Blog"
-
 if "show_modal" not in st.session_state:
     st.session_state["show_modal"] = False
-
-# React component (modal) setup
-component_func = components.declare_component(
-    name="output_selector",
-    path="web_ui/frontend/build"
-)
-
-# Show modal and wait for user input
-if st.session_state["show_modal"]:
-    st.info("⏳ Waiting for user to select output type...")
-
-    # Call the component
-    choice = component_func(default=None)
-
-    # Debug info
-    st.write("🔍 Modal return value:", choice)
-
-    if choice is None:
-        st.stop()  # Pause until user makes a choice
-
-    # Choice was made!
-    st.success(f"✅ User selected: {choice}")
-    st.session_state["render_choice"] = choice
-    st.session_state["show_modal"] = False
-    st.rerun()
-
-
+if "can_generate" not in st.session_state:
+    st.session_state["can_generate"] = False
 
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
@@ -121,17 +95,25 @@ if mode == "Single Product":
         "Upload Product Images (PNG/JPG)",
         type=["png","jpg","jpeg"], accept_multiple_files=True
     )
-
     if st.button("Generate"):
         if not all([title, description, uploaded_images]):
             st.error("Please enter title, description, and upload images (at least one).")
         else:
             st.session_state["show_modal"] = True
+
+    if st.session_state["show_modal"]:
+        st.markdown("### Select Output Type")
+        st.session_state["render_choice"] = st.radio("Choose what to generate:", ["Video only", "Blog only", "Video + Blog"], index=2)
+
+        if st.button("Continue"):
+            st.session_state["show_modal"] = False
+            st.session_state["can_generate"] = True
             st.rerun()
 
-    if uploaded_images and title and description and not st.session_state["show_modal"]:
-            slug = slugify(title)
-            with temp_workspace() as tmpdir:
+    if st.session_state["can_generate"]:
+        st.session_state["can_generate"] = False
+        slug = slugify(title)
+        with temp_workspace() as tmpdir:
                 # save images
                 image_urls = []
                 for up in uploaded_images:
@@ -194,12 +176,21 @@ else:
 
     if st.button("Run Batch"):
         if not up_csv:
-            st.error("📂 Please upload a Products CSV.")
+            st.error("\ud83d\udcc2 Please upload a Products CSV.")
         else:
             st.session_state["show_modal"] = True
+
+    if st.session_state["show_modal"]:
+        st.markdown("### Select Output Type")
+        st.session_state["render_choice"] = st.radio("Choose what to generate:", ["Video only", "Blog only", "Video + Blog"], index=2)
+
+        if st.button("Continue"):
+            st.session_state["show_modal"] = False
+            st.session_state["can_generate"] = True
             st.rerun()
 
-    if up_csv and not st.session_state["show_modal"]:
+    if up_csv and st.session_state["can_generate"]:
+        st.session_state["can_generate"] = False
         # Load CSV
         with temp_workspace() as master_tmp:
             # Save & read CSV
@@ -271,14 +262,12 @@ else:
                     st.subheader(f"Results for {sub}")
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
-
+                    
                     if st.session_state['render_choice'] in ("Video only", "Video + Blog") and os.path.exists(vid):
                         st.video(vid)
-
                     if st.session_state['render_choice'] in ("Blog only", "Video + Blog") and os.path.exists(blog):
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
-
 
                     # upload results to Drive
                     prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
