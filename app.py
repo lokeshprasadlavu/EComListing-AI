@@ -72,6 +72,13 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
+# Let User Select Output Options ──────────────────────────────────────────────
+output_options = st.radio(
+    "Choose which outputs to render:",
+    ("Video only", "Blog only", "Video + Blog"),
+    index=2
+)
+
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
@@ -87,7 +94,7 @@ if mode == "Single Product":
 
     if st.button("Generate"):
         if not all([title, description, uploaded_images]):
-            st.error("Please enter title, description, and images.")
+            st.error("Please enter title, description, and upload images(atleast one).")
         else:
             slug = slugify(title)
             with temp_workspace() as tmpdir:
@@ -125,9 +132,12 @@ if mode == "Single Product":
                     st.stop()
 
                 st.subheader(title)
-                st.video(result.video_path)
-                st.markdown("**Blog Content**")
-                st.write(open(result.blog_file,'r',encoding='utf-8').read())
+                if output_options in ("Video only", "Video + Blog"):
+                    st.video(result.video_path)
+
+                if output_options in ("Blog only", "Video + Blog"):
+                    st.markdown("**Blog Content**")
+                    st.write(open(result.blog_file,'r',encoding='utf-8').read())
 
                 # upload
                 prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
@@ -227,8 +237,14 @@ else:
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
 
-                    if os.path.exists(vid):  st.video(vid)
-                    if os.path.exists(blog): st.write(open(blog,'r').read())
+                    if output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
+                        st.video(vid)
+
+                    if output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+                        st.markdown("**Blog Content**")
+                        st.write(open(blog, 'r').read())
+
+                    # upload results to Drive
                     prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
                     for path in glob.glob(os.path.join(subdir,'*')):
                         if path.lower().endswith(('.mp4','.txt')):
