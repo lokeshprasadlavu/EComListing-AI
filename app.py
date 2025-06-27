@@ -128,11 +128,11 @@ def show_modal():
     """, height=400)
 
 # --- Handle popup selection ---
-query_params = st.experimental_get_query_params()
+query_params = st.query_params
 if "choice" in query_params:
     st.session_state['render_choice'] = query_params["choice"][0]
     st.session_state['show_modal'] = False
-    st.experimental_set_query_params()
+    st.query_params.clear()
     st.experimental_rerun()
 
 
