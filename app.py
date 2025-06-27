@@ -4,7 +4,6 @@ import tempfile
 import time
 import glob
 import re
-import streamlit.components.v1 as components
 
 import streamlit as st
 import pandas as pd
@@ -73,18 +72,15 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# ----------------- SESSION STATE ------------------
-if "render_choice" not in st.session_state:
-    st.session_state["render_choice"] = "Video + Blog"
-if "show_modal" not in st.session_state:
-    st.session_state["show_modal"] = False
-if "can_generate" not in st.session_state:
-    st.session_state["can_generate"] = False
-
+# Let User Select Output Options ──────────────────────────────────────────────
+output_options = st.radio(
+    "Choose which outputs to render:",
+    ("Video only", "Blog only", "Video + Blog"),
+    index=2
+)
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
-
 
 # ─── Single Product Mode ─────────────────────────────────────────────────────
 if mode == "Single Product":
@@ -95,25 +91,13 @@ if mode == "Single Product":
         "Upload Product Images (PNG/JPG)",
         type=["png","jpg","jpeg"], accept_multiple_files=True
     )
+
     if st.button("Generate"):
         if not all([title, description, uploaded_images]):
-            st.error("Please enter title, description, and upload images (at least one).")
+            st.error("Please enter title, description, and upload images(atleast one).")
         else:
-            st.session_state["show_modal"] = True
-
-    if st.session_state["show_modal"]:
-        st.markdown("### Select Output Type")
-        st.session_state["render_choice"] = st.radio("Choose what to generate:", ["Video only", "Blog only", "Video + Blog"], index=2)
-
-        if st.button("Continue"):
-            st.session_state["show_modal"] = False
-            st.session_state["can_generate"] = True
-            st.rerun()
-
-    if st.session_state["can_generate"]:
-        st.session_state["can_generate"] = False
-        slug = slugify(title)
-        with temp_workspace() as tmpdir:
+            slug = slugify(title)
+            with temp_workspace() as tmpdir:
                 # save images
                 image_urls = []
                 for up in uploaded_images:
@@ -148,11 +132,12 @@ if mode == "Single Product":
                     st.stop()
 
                 st.subheader(title)
-                if st.session_state["render_choice"] in ("Video only", "Video + Blog"):
+                if output_options in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
-                if st.session_state["render_choice"] in ("Blog only", "Video + Blog"):
+
+                if output_options in ("Blog only", "Video + Blog"):
                     st.markdown("**Blog Content**")
-                    st.write(open(result.blog_file, 'r', encoding='utf-8').read())
+                    st.write(open(result.blog_file,'r',encoding='utf-8').read())
 
                 # upload
                 prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
@@ -175,22 +160,11 @@ else:
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
+        # CSV must be present
         if not up_csv:
-            st.error("\ud83d\udcc2 Please upload a Products CSV.")
-        else:
-            st.session_state["show_modal"] = True
+            st.error("📂 Please upload a Products CSV.")
+            st.stop()
 
-    if st.session_state["show_modal"]:
-        st.markdown("### Select Output Type")
-        st.session_state["render_choice"] = st.radio("Choose what to generate:", ["Video only", "Blog only", "Video + Blog"], index=2)
-
-        if st.button("Continue"):
-            st.session_state["show_modal"] = False
-            st.session_state["can_generate"] = True
-            st.rerun()
-
-    if up_csv and st.session_state["can_generate"]:
-        st.session_state["can_generate"] = False
         # Load CSV
         with temp_workspace() as master_tmp:
             # Save & read CSV
@@ -262,10 +236,11 @@ else:
                     st.subheader(f"Results for {sub}")
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
-                    
-                    if st.session_state['render_choice'] in ("Video only", "Video + Blog") and os.path.exists(vid):
+
+                    if output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
                         st.video(vid)
-                    if st.session_state['render_choice'] in ("Blog only", "Video + Blog") and os.path.exists(blog):
+
+                    if output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
 
