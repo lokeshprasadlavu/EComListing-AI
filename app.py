@@ -198,7 +198,7 @@ else:
                     with st.spinner("Validating Images JSON..."):
                         validate_images_json(images_data)
                 except ValueError as e:
-                    st.error(e.message)
+                    st.error(str(e))
                     st.stop()
 
             # Build and run the batch
