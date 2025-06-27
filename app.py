@@ -86,13 +86,25 @@ component_func = components.declare_component(
     path="web_ui/frontend/build"
 )
 
-# --- Streamlit rerun from React ---
+# Show modal and wait for user input
 if st.session_state["show_modal"]:
-    choice = component_func()
-    if choice:
-        st.session_state["render_choice"] = choice
-        st.session_state["show_modal"] = False
-        st.rerun()
+    st.info("⏳ Waiting for user to select output type...")
+
+    # Call the component
+    choice = component_func(default=None)
+
+    # Debug info
+    st.write("🔍 Modal return value:", choice)
+
+    if choice is None:
+        st.stop()  # Pause until user makes a choice
+
+    # Choice was made!
+    st.success(f"✅ User selected: {choice}")
+    st.session_state["render_choice"] = choice
+    st.session_state["show_modal"] = False
+    st.rerun()
+
 
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────

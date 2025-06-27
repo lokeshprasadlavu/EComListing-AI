@@ -1,12 +1,15 @@
-
-import React from "react";
-import { Streamlit, withStreamlitConnection, ComponentProps } from "streamlit-component-lib";
-
+import React from "react"
+import { Streamlit, withStreamlitConnection, ComponentProps } from "streamlit-component-lib"
 
 const ModalSelector = (props: ComponentProps) => {
   const sendChoice = (choice: string) => {
-    Streamlit.setComponentValue(choice);
-  };
+    console.log("User clicked choice:", choice)
+    Streamlit.setComponentValue(choice)
+  }
+
+  React.useEffect(() => {
+    console.log("📦 ModalSelector mounted")
+  }, [])
 
   return (
     <div style={{
@@ -18,7 +21,8 @@ const ModalSelector = (props: ComponentProps) => {
       backgroundColor: "rgba(0, 0, 0, 0.5)",
       display: "flex",
       justifyContent: "center",
-      alignItems: "center"
+      alignItems: "center",
+      zIndex: 9999
     }}>
       <div style={{
         backgroundColor: "#fff",
@@ -33,7 +37,7 @@ const ModalSelector = (props: ComponentProps) => {
         <button onClick={() => sendChoice("Blog only")}>Blog only</button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default withStreamlitConnection(ModalSelector);
+export default withStreamlitConnection(ModalSelector)
