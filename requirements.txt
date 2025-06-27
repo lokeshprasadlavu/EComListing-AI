@@ -13,4 +13,4 @@ pillow
 gtts
 pydub
 openai==0.28.0
-jsonschema
+fastjsonschema

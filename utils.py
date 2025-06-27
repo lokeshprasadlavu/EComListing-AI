@@ -8,7 +8,8 @@ import zipfile
 from contextlib import contextmanager
 from typing import List
 import requests
-from jsonschema import validate, Draft7Validator, ValidationError
+import fastjsonschema
+from fastjsonschema import JsonSchemaException
 
 def ensure_dir(path: str):
     """Create directory if it doesn’t exist."""
@@ -103,30 +104,17 @@ images_json_schema = {
 }
 
 def validate_images_json(data):
+    compiled_image_validator = fastjsonschema.compile(images_json_schema["items"])
     if not isinstance(data, list):
-        raise ValidationError("❌ Invalid Images JSON.")
+        raise JsonSchemaException("Top-level JSON must be a list of entries.")
 
-    item_schema = images_json_schema["items"]
-
-    for idx, entry in enumerate(data):
+    for idx, entry in enumerate(data, start=1):
         try:
-            validate(instance=entry, schema=item_schema)
-        except ValidationError as e:
-            # Try to extract listingId and productId
+            compiled_image_validator(entry)
+        except JsonSchemaException as e:
             lid = entry.get("listingId")
             pid = entry.get("productId")
-
-            # Fallback to adjacent entries
-            if not lid or not pid:
-                if idx > 0:
-                    prev = data[idx - 1]
-                    lid = lid or prev.get("listingId")
-                    pid = pid or prev.get("productId")
-                elif idx + 1 < len(data):
-                    nxt = data[idx + 1]
-                    lid = lid or nxt.get("listingId")
-                    pid = pid or nxt.get("productId")
-
-            # Build reference
-            ref = f"(listingId={lid}, productId={pid})" if lid or pid else f"(entry #{idx + 1})"
-            raise ValidationError(f"❌ Invalid Images JSON at {ref}: {e.message}")
+            identifier = f"(listingId={lid}, productId={pid})" if lid and pid else f"# {idx}"
+            raise JsonSchemaException(
+                f"❌ Invalid Images JSON at {identifier}: {e.message}"
+            )
