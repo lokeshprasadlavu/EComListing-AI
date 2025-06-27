@@ -69,11 +69,22 @@ st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
 # Let User Select Output Options ──────────────────────────────────────────────
-output_options = st.radio(
-    "Choose which outputs to render:",
-    ("Video only", "Blog only", "Video + Blog"),
-    index=2
-)
+if "output_options" not in st.session_state:
+    st.session_state.output_options = "Video + Blog"
+
+if "show_output_radio_single" not in st.session_state:
+    st.session_state["show_output_radio_single"] = False
+if "show_output_radio_batch" not in st.session_state:
+    st.session_state["show_output_radio_batch"] = False
+
+
+def ask_output_choice(key="output_choice"):
+    st.session_state.output_options = st.radio(
+        "Choose which outputs to render:",
+        ("Video only", "Blog only", "Video + Blog"),
+        index=2,
+        key=key
+    )
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
@@ -90,8 +101,14 @@ if mode == "Single Product":
 
     if st.button("Generate"):
         if not all([title, description, uploaded_images]):
-            st.error("Please enter title, description, and upload images(atleast one).")
+            st.error("Please enter title, description, and upload images(at least one).")
         else:
+            st.session_state.show_output_radio_single = True
+
+    if st.session_state.show_output_radio_single:
+        ask_output_choice("output_choice_single")
+        if st.button("Continue", key="continue_single"):
+            st.session_state.show_output_radio_single = False
             slug = slugify(title)
             with temp_workspace() as tmpdir:
                 # save images
@@ -128,12 +145,12 @@ if mode == "Single Product":
                     st.stop()
 
                 st.subheader(title)
-                if output_options in ("Video only", "Video + Blog"):
+                if st.session_state.output_options in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
 
-                if output_options in ("Blog only", "Video + Blog"):
+                if st.session_state.output_options in ("Blog only", "Video + Blog"):
                     st.markdown("**Blog Content**")
-                    st.write(open(result.blog_file,'r',encoding='utf-8').read())
+                    st.write(open(result.blog_file, 'r', encoding='utf-8').read())
 
                 # upload
                 prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
@@ -207,6 +224,21 @@ else:
                     st.error(str(e))
                     st.stop()
 
+            st.session_state.show_output_radio_batch = True
+
+            if st.session_state.show_output_radio_batch:
+                ask_output_choice("output_choice_batch")
+                if st.button("Continue", key="continue_batch"):
+                    st.session_state.show_output_radio_batch = False
+                    svc_cfg = ServiceConfig(
+                        csv_file=csv_path,
+                        images_json=(json_path if img_col is None else ""),
+                        audio_folder=master_tmp,
+                        fonts_zip_path=fonts_folder,
+                        logo_path=logo_path,
+                        output_base_folder=master_tmp,
+                    )
+
             # Build and run the batch
             svc_cfg = ServiceConfig(
                 csv_file=csv_path,
@@ -233,10 +265,10 @@ else:
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
 
-                    if output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
+                    if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
                         st.video(vid)
 
-                    if output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+                    if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
 
