@@ -73,10 +73,68 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# ─── Reset session state on rerun ───
-for key in ('single_render_choice', 'batch_render_choice'):
-    if key in st.session_state:
-        del st.session_state[key]
+# Default states
+if "render_choice" not in st.session_state:
+    st.session_state["render_choice"] = "Video + Blog"
+
+if "show_modal" not in st.session_state:
+    st.session_state["show_modal"] = False
+
+# Modal UI
+from streamlit.components.v1 import html
+
+def show_modal():
+    html("""
+    <style>
+    .modal {
+      display: block;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.4);
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 30px;
+      border: 1px solid #888;
+      width: 40%;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .modal-content button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    </style>
+    <div class="modal">
+      <div class="modal-content">
+        <h3>Select Output Type:</h3>
+        <form method="get">
+          <button name="choice" value="Video + Blog" style="background-color:#007bff;color:white;">Video + Blog</button>
+          <button name="choice" value="Video only" style="background-color:#28a745;color:white;">Video only</button>
+          <button name="choice" value="Blog only" style="background-color:#ffc107;color:black;">Blog only</button>
+        </form>
+      </div>
+    </div>
+    """, height=400)
+
+# --- Handle popup selection ---
+query_params = st.experimental_get_query_params()
+if "choice" in query_params:
+    st.session_state['render_choice'] = query_params["choice"][0]
+    st.session_state['show_modal'] = False
+    st.experimental_set_query_params()
+    st.experimental_rerun()
+
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
@@ -101,16 +159,19 @@ if mode == "Single Product":
         "Upload Product Images (PNG/JPG)",
         type=["png","jpg","jpeg"], accept_multiple_files=True
     )
+
     if st.button("Generate"):
         if not all([title, description, uploaded_images]):
-            st.error("Please enter title, description, and upload images(at least one).")
+            st.error("Please enter title, description, and upload images (at least one).")
         else:
-            st.session_state['show_render_options'] = True
+            st.session_state['show_modal'] = True
             st.experimental_rerun()
 
-        if not st.session_state.get('show_render_options') and uploaded_images and title and description:
-            st.error("Please enter title, description, and upload images(atleast one).")
-        else:
+    if st.session_state.get("show_modal"):
+        show_modal()
+        st.stop()
+
+    if uploaded_images and title and description and not st.session_state.get("show_modal"):
             slug = slugify(title)
             with temp_workspace() as tmpdir:
                 # save images
@@ -149,10 +210,9 @@ if mode == "Single Product":
                 st.subheader(title)
                 if st.session_state['render_choice'] in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
-
                 if st.session_state['render_choice'] in ("Blog only", "Video + Blog"):
                     st.markdown("**Blog Content**")
-                    st.write(open(result.blog_file,'r',encoding='utf-8').read())
+                    st.write(open(result.blog_file, 'r', encoding='utf-8').read())
 
                 # upload
                 prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
@@ -178,10 +238,15 @@ else:
         if not up_csv:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
-        st.session_state['show_render_options'] = True
-        st.experimental_rerun()
+        else:
+            st.session_state['show_modal'] = True
+            st.experimental_rerun()
 
-    if not st.session_state.get('show_render_options') and up_csv:
+    if st.session_state.get("show_modal"):
+        show_modal()
+        st.stop()
+
+    if up_csv and not st.session_state.get("show_modal"):
         # Load CSV
         with temp_workspace() as master_tmp:
             # Save & read CSV
@@ -260,7 +325,8 @@ else:
                     if st.session_state['render_choice'] in ("Blog only", "Video + Blog") and os.path.exists(blog):
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
-                        
+
+
                     # upload results to Drive
                     prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
                     for path in glob.glob(os.path.join(subdir,'*')):
