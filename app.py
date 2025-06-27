@@ -80,6 +80,46 @@ for key in ('single_render_choice', 'batch_render_choice'):
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
+# ─── Modal Simulation ───
+def show_modal(key_prefix):
+    st.markdown("""
+        <style>
+        .modal {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 2rem;
+            border: 2px solid #888;
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            width: 400px;
+            border-radius: 10px;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 100vw;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        </style>
+        <div class="overlay"></div>
+        <div class="modal">
+            <h4>Select what to render</h4>
+    """, unsafe_allow_html=True)
+
+    render_choice = st.radio("Choose:", ["Video + Blog", "Video only", "Blog only"], key=f"modal_choice_{key_prefix}")
+    if st.button("Confirm", key=f"confirm_{key_prefix}"):
+        st.session_state[f'{key_prefix}_render_choice'] = render_choice
+        st.session_state.show_modal = False
+        st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
 # ─── Single Product Mode ─────────────────────────────────────────────────────
 if mode == "Single Product":
     st.header("Generate Video & Blog for a Single Product")
@@ -90,20 +130,12 @@ if mode == "Single Product":
         type=["png","jpg","jpeg"], accept_multiple_files=True
     )
 
-    if "show_single_modal" not in st.session_state:
-        st.session_state["show_single_modal"] = False
-
     if st.button("Generate"):
-        st.session_state["show_single_modal"] = True
+        st.session_state.show_modal = True
+        st.session_state.modal_type = "single"
 
-    if st.session_state["show_single_modal"]:
-        st.subheader("🛠️ Select what to render")
-        render_choice = st.radio("What would you like to generate?", ["Video + Blog", "Video only", "Blog only"], key="single_render_choice_radio")
-
-        if st.button("Confirm", key="single_confirm"):
-            st.session_state["single_render_choice"] = render_choice
-            st.session_state["show_single_modal"] = False
-            st.rerun()
+    if st.session_state.get("show_modal") and st.session_state.get("modal_type") == "single":
+        show_modal("single")
 
     if 'single_render_choice' in st.session_state:
         render_choice = st.session_state['single_render_choice']
@@ -173,11 +205,11 @@ else:
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
-        with st.modal("Select what to render"):
-            render_choice = st.radio("What would you like to generate for each product?",["Video + Blog", "Video only", "Blog only"])
-            if st.button("Confirm", key="batch_confirm"):
-                st.session_state['batch_render_choice'] = render_choice
-                st.rerun()
+        st.session_state.show_modal = True
+        st.session_state.modal_type = "batch"
+
+    if st.session_state.get("show_modal") and st.session_state.get("modal_type") == "batch":
+        show_modal("batch")
 
     if 'batch_render_choice' in st.session_state:
         render_choice = st.session_state['batch_render_choice']
