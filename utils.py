@@ -103,13 +103,8 @@ images_json_schema = {
 }
 
 def validate_images_json(data):
-    if not isinstance(data, list):
-        raise ValidationError("Top level JSON must be a list.")
-    item_schema = images_json_schema["items"]
-    validator = Draft7Validator(item_schema)
-    for idx, entry in enumerate(data, start=1):
-        errors = list(validator.iter_errors(entry))
-        if errors:
-            e = errors[0]
-            path = ".".join(str(p) for p in e.path) or "<entry>"
-            raise ValidationError(f"Entry #{idx} at '{path}': {e.message}")
+    from utils import images_json_schema  # if not already in scope
+    try:
+        validate(instance=data, schema=images_json_schema)
+    except ValidationError as e:
+        raise ValidationError(f"❌ Invalid Images JSON: {e.message}")
