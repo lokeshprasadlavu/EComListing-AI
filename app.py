@@ -195,9 +195,10 @@ else:
 
                 # validation of JSON structure
                 try:
-                    validate_images_json(images_data)
+                    with st.spinner("Validating Images JSON..."):
+                        validate_images_json(images_data)
                 except ValidationError as e:
-                    st.error(f"❌ Invalid Images JSON: {e.message}")
+                    st.error(e.message)
                     st.stop()
 
             # Build and run the batch
