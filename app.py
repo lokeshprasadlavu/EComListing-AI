@@ -72,12 +72,10 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# Let User Select Output Options ──────────────────────────────────────────────
-output_options = st.radio(
-    "Choose which outputs to render:",
-    ("Video only", "Blog only", "Video + Blog"),
-    index=2
-)
+# ─── Reset session state on rerun ───
+for key in ('single_render_choice', 'batch_render_choice'):
+    if key in st.session_state:
+        del st.session_state[key]
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
@@ -93,6 +91,14 @@ if mode == "Single Product":
     )
 
     if st.button("Generate"):
+        with st.modal("Select what to render"):
+            render_choice = st.radio("What would you like to generate?",["Video + Blog", "Video only", "Blog only"])
+            if st.button("Confirm", key="single_confirm"):
+                st.session_state['single_render_choice'] = render_choice
+                st.rerun()
+
+    if 'single_render_choice' in st.session_state:
+        render_choice = st.session_state['single_render_choice']
         if not all([title, description, uploaded_images]):
             st.error("Please enter title, description, and upload images(atleast one).")
         else:
@@ -132,10 +138,9 @@ if mode == "Single Product":
                     st.stop()
 
                 st.subheader(title)
-                if output_options in ("Video only", "Video + Blog"):
+                if render_choice in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
-
-                if output_options in ("Blog only", "Video + Blog"):
+                if render_choice in ("Blog only", "Video + Blog"):
                     st.markdown("**Blog Content**")
                     st.write(open(result.blog_file,'r',encoding='utf-8').read())
 
@@ -160,7 +165,14 @@ else:
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
-        # CSV must be present
+        with st.modal("Select what to render"):
+            render_choice = st.radio("What would you like to generate for each product?",["Video + Blog", "Video only", "Blog only"])
+            if st.button("Confirm", key="batch_confirm"):
+                st.session_state['batch_render_choice'] = render_choice
+                st.rerun()
+
+    if 'batch_render_choice' in st.session_state:
+        render_choice = st.session_state['batch_render_choice']
         if not up_csv:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
@@ -237,10 +249,10 @@ else:
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
 
-                    if output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
+                    if render_choice in ("Video only", "Video + Blog") and os.path.exists(vid):
                         st.video(vid)
 
-                    if output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+                    if render_choice in ("Blog only", "Video + Blog") and os.path.exists(blog):
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
 
