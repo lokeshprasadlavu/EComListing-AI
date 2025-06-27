@@ -214,7 +214,7 @@ else:
                 generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
             except GenerationError as ge:
                 st.error(f"⚠️ Generation failed: {ge}")
-                st.stop()
+                st.stop()      
 
                 
                 for sub in os.listdir(master_tmp):
