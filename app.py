@@ -215,9 +215,6 @@ else:
             except GenerationError as ge:
                 st.error(f"⚠️ Generation failed: {ge}")
                 st.stop()
-            except Exception:
-                st.error("⚠️ Batch generation encountered an unexpected error. Please try again later.")
-                st.stop()
 
                 
                 for sub in os.listdir(master_tmp):
