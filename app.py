@@ -230,6 +230,8 @@ else:
                 ask_output_choice("output_choice_batch")
                 if st.button("Continue", key="continue_batch"):
                     st.session_state.show_output_radio_batch = False
+
+                    # Build and run the batch
                     svc_cfg = ServiceConfig(
                         csv_file=csv_path,
                         images_json=(json_path if img_col is None else ""),
@@ -239,50 +241,40 @@ else:
                         output_base_folder=master_tmp,
                     )
 
-            # Build and run the batch
-            svc_cfg = ServiceConfig(
-                csv_file=csv_path,
-                images_json=(json_path if img_col is None else ""),
-                audio_folder=master_tmp,
-                fonts_zip_path=fonts_folder,
-                logo_path=logo_path,
-                output_base_folder=master_tmp,
-            )
+                    try:
+                        generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
+                    except GenerationError as ge:
+                        st.error(f"⚠️ Generation failed: {ge}")
+                        st.stop()      
 
-            try:
-                generate_batch_from_csv(cfg=svc_cfg, images_data=images_data)
-            except GenerationError as ge:
-                st.error(f"⚠️ Generation failed: {ge}")
-                st.stop()      
+                        
+                        for sub in os.listdir(master_tmp):
+                            subdir = os.path.join(master_tmp, sub)
+                            if not os.path.isdir(subdir): 
+                                continue
 
-                
-                for sub in os.listdir(master_tmp):
-                    subdir = os.path.join(master_tmp, sub)
-                    if not os.path.isdir(subdir): 
-                        continue
+                            st.subheader(f"Results for {sub}")
+                            vid  = os.path.join(subdir, f"{sub}.mp4")
+                            blog = os.path.join(subdir, f"{sub}_blog.txt")
 
-                    st.subheader(f"Results for {sub}")
-                    vid  = os.path.join(subdir, f"{sub}.mp4")
-                    blog = os.path.join(subdir, f"{sub}_blog.txt")
+                            if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
+                                st.video(vid)
 
-                    if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
-                        st.video(vid)
+                            if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+                                st.markdown("**Blog Content**")
+                                st.write(open(blog, 'r').read())
 
-                    if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
-                        st.markdown("**Blog Content**")
-                        st.write(open(blog, 'r').read())
-
-                    # upload results to Drive
-                    prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
-                    for path in glob.glob(os.path.join(subdir,'*')):
-                        if path.lower().endswith(('.mp4','.txt')):
-                            try:
-                                mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                                drive_db.upload_file(
-                                    name=os.path.basename(path),
-                                    data=open(path,'rb').read(),
-                                    mime_type=mime,
-                                    parent_id=prod_f
-                                )
-                            except Exception as e:
-                                st.warning(f"⚠️ Failed to upload to Database: {e}")
+                            # upload results to Drive
+                            prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
+                            for path in glob.glob(os.path.join(subdir,'*')):
+                                if path.lower().endswith(('.mp4','.txt')):
+                                    try:
+                                        mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
+                                        drive_db.upload_file(
+                                            name=os.path.basename(path),
+                                            data=open(path,'rb').read(),
+                                            mime_type=mime,
+                                            parent_id=prod_f
+                                        )
+                                    except Exception as e:
+                                        st.warning(f"⚠️ Failed to upload to Database: {e}")
