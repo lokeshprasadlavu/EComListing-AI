@@ -195,7 +195,6 @@ def generate_batch_from_csv(
                 )
             except GenerationError as ge:
                 log.error(f"{lid}/{pid} generation failed: {ge}")
-                continue
 
             # Copy outputs
             dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")

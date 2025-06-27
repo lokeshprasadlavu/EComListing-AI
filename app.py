@@ -186,16 +186,14 @@ else:
                     )
                     st.stop()
 
-                # Load JSON
+                # Load & validate JSON
                 json_path = os.path.join(master_tmp, up_json.name)
                 with open(json_path, "wb") as f:
                     f.write(up_json.getbuffer())
 
-                # Proper JSON load
-                with open(json_path, "r", encoding="utf-8") as f:
-                    images_data = json.load(f)
+                images_data = json.load(open(json_path))
 
-                # validation
+                # validation of JSON structure
                 try:
                     validate_images_json(images_data)
                 except ValidationError as e:
