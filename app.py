@@ -133,7 +133,7 @@ if "choice" in query_params:
     st.session_state['render_choice'] = query_params["choice"][0]
     st.session_state['show_modal'] = False
     st.query_params.clear()
-    st.experimental_rerun()
+    st.rerun()
 
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
