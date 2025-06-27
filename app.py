@@ -4,6 +4,7 @@ import tempfile
 import time
 import glob
 import re
+import streamlit.components.v1 as components
 
 import streamlit as st
 import pandas as pd
@@ -80,45 +81,16 @@ for key in ('single_render_choice', 'batch_render_choice'):
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
-# ─── Modal Simulation ───
-def show_modal(key_prefix):
-    st.markdown("""
-        <style>
-        .modal {
-            position: fixed;
-            top: 20%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 2rem;
-            border: 2px solid #888;
-            box-shadow: 0px 0px 10px rgba(0,0,0,0.3);
-            z-index: 1000;
-            width: 400px;
-            border-radius: 10px;
-        }
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: 100vh;
-            width: 100vw;
-            background-color: rgba(0,0,0,0.5);
-            z-index: 999;
-        }
-        </style>
-        <div class="overlay"></div>
-        <div class="modal">
-            <h4>Select what to render</h4>
-    """, unsafe_allow_html=True)
+# ─── Render Options ───
+if 'render_choice' not in st.session_state:
+    st.session_state['render_choice'] = "Video + Blog"
 
-    render_choice = st.radio("Choose:", ["Video + Blog", "Video only", "Blog only"], key=f"modal_choice_{key_prefix}")
-    if st.button("Confirm", key=f"confirm_{key_prefix}"):
-        st.session_state[f'{key_prefix}_render_choice'] = render_choice
-        st.session_state.show_modal = False
-        st.rerun()
-
-    st.markdown("</div>", unsafe_allow_html=True)
+if st.session_state.get('show_render_options'):
+    with st.form("render_form"):
+        st.session_state['render_choice'] = st.radio("Choose what to render:", ["Video + Blog", "Video only", "Blog only"])
+        submitted = st.form_submit_button("Confirm")
+        if submitted:
+            st.session_state['show_render_options'] = False
 
 # ─── Single Product Mode ─────────────────────────────────────────────────────
 if mode == "Single Product":
@@ -129,17 +101,14 @@ if mode == "Single Product":
         "Upload Product Images (PNG/JPG)",
         type=["png","jpg","jpeg"], accept_multiple_files=True
     )
-
     if st.button("Generate"):
-        st.session_state.show_modal = True
-        st.session_state.modal_type = "single"
-
-    if st.session_state.get("show_modal") and st.session_state.get("modal_type") == "single":
-        show_modal("single")
-
-    if 'single_render_choice' in st.session_state:
-        render_choice = st.session_state['single_render_choice']
         if not all([title, description, uploaded_images]):
+            st.error("Please enter title, description, and upload images(at least one).")
+        else:
+            st.session_state['show_render_options'] = True
+            st.experimental_rerun()
+
+        if not st.session_state.get('show_render_options') and uploaded_images and title and description:
             st.error("Please enter title, description, and upload images(atleast one).")
         else:
             slug = slugify(title)
@@ -178,9 +147,10 @@ if mode == "Single Product":
                     st.stop()
 
                 st.subheader(title)
-                if render_choice in ("Video only", "Video + Blog"):
+                if st.session_state['render_choice'] in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
-                if render_choice in ("Blog only", "Video + Blog"):
+
+                if st.session_state['render_choice'] in ("Blog only", "Video + Blog"):
                     st.markdown("**Blog Content**")
                     st.write(open(result.blog_file,'r',encoding='utf-8').read())
 
@@ -205,18 +175,13 @@ else:
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if st.button("Run Batch"):
-        st.session_state.show_modal = True
-        st.session_state.modal_type = "batch"
-
-    if st.session_state.get("show_modal") and st.session_state.get("modal_type") == "batch":
-        show_modal("batch")
-
-    if 'batch_render_choice' in st.session_state:
-        render_choice = st.session_state['batch_render_choice']
         if not up_csv:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
+        st.session_state['show_render_options'] = True
+        st.experimental_rerun()
 
+    if not st.session_state.get('show_render_options') and up_csv:
         # Load CSV
         with temp_workspace() as master_tmp:
             # Save & read CSV
@@ -289,13 +254,13 @@ else:
                     vid  = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
 
-                    if render_choice in ("Video only", "Video + Blog") and os.path.exists(vid):
+                    if st.session_state['render_choice'] in ("Video only", "Video + Blog") and os.path.exists(vid):
                         st.video(vid)
 
-                    if render_choice in ("Blog only", "Video + Blog") and os.path.exists(blog):
+                    if st.session_state['render_choice'] in ("Blog only", "Video + Blog") and os.path.exists(blog):
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
-
+                        
                     # upload results to Drive
                     prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
                     for path in glob.glob(os.path.join(subdir,'*')):
