@@ -106,7 +106,7 @@ images_json_schema = {
 def validate_images_json(data):
     compiled_image_validator = fastjsonschema.compile(images_json_schema["items"])
     if not isinstance(data, list):
-        raise JsonSchemaException("Top-level JSON must be a list of entries.")
+        raise ValueError("❌ Invalid Images JSON.")
 
     for idx, entry in enumerate(data, start=1):
         try:
@@ -115,6 +115,4 @@ def validate_images_json(data):
             lid = entry.get("listingId")
             pid = entry.get("productId")
             identifier = f"(listingId={lid}, productId={pid})" if lid and pid else f"# {idx}"
-            raise JsonSchemaException(
-                f"❌ Invalid Images JSON at {identifier}: {e.message}"
-            )
+            raise ValueError(f"❌ Invalid Images JSON at {identifier}: {e.message}")

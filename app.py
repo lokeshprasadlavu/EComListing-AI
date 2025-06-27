@@ -197,7 +197,7 @@ else:
                 try:
                     with st.spinner("Validating Images JSON..."):
                         validate_images_json(images_data)
-                except ValidationError as e:
+                except ValueError as e:
                     st.error(e.message)
                     st.stop()
 
