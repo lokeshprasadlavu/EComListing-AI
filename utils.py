@@ -103,7 +103,6 @@ images_json_schema = {
 }
 
 def validate_images_json(data):
-    from utils import images_json_schema  # if not already in scope
     try:
         validate(instance=data, schema=images_json_schema)
     except ValidationError as e:
