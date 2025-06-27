@@ -73,66 +73,31 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-def show_modal():
-    with st.container():
-        st.markdown("""
-            <style>
-            .overlay {
-                position: fixed;
-                top: 0; left: 0;
-                width: 100%; height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 9999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .modal-box {
-                background: white;
-                padding: 30px;
-                border-radius: 12px;
-                text-align: center;
-            }
-            </style>
-            <div class="overlay">
-              <div class="modal-box">
-                <h4>Select Output Type:</h4>
-            """, unsafe_allow_html=True)
+# State defaults
+if "render_choice" not in st.session_state:
+    st.session_state["render_choice"] = "Video + Blog"
 
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col1:
-            if st.button("📹 Video + Blog"):
-                st.session_state["render_choice"] = "Video + Blog"
-                st.session_state["show_modal"] = False
-                st.rerun()
-        with col2:
-            if st.button("🎞️ Video only"):
-                st.session_state["render_choice"] = "Video only"
-                st.session_state["show_modal"] = False
-                st.rerun()
-        with col3:
-            if st.button("📝 Blog only"):
-                st.session_state["render_choice"] = "Blog only"
-                st.session_state["show_modal"] = False
-                st.rerun()
+if "show_modal" not in st.session_state:
+    st.session_state["show_modal"] = False
 
-        st.markdown("</div></div>", unsafe_allow_html=True)
+# React component (modal) setup
+component_func = components.declare_component(
+    name="output_selector",
+    path="web_ui/frontend/build"
+)
 
+# --- Streamlit rerun from React ---
+if st.session_state["show_modal"]:
+    choice = component_func()
+    if choice:
+        st.session_state["render_choice"] = choice
+        st.session_state["show_modal"] = False
+        st.rerun()
 
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
-# ─── Render Options ───
-if 'render_choice' not in st.session_state:
-    st.session_state['render_choice'] = "Video + Blog"
-
-if st.session_state.get('show_render_options'):
-    with st.form("render_form"):
-        st.session_state['render_choice'] = st.radio("Choose what to render:", ["Video + Blog", "Video only", "Blog only"])
-        submitted = st.form_submit_button("Confirm")
-        if submitted:
-            st.session_state['show_render_options'] = False
 
 # ─── Single Product Mode ─────────────────────────────────────────────────────
 if mode == "Single Product":
@@ -148,14 +113,10 @@ if mode == "Single Product":
         if not all([title, description, uploaded_images]):
             st.error("Please enter title, description, and upload images (at least one).")
         else:
-            st.session_state['show_modal'] = True
-            st.experimental_rerun()
+            st.session_state["show_modal"] = True
+            st.rerun()
 
-    if st.session_state.get("show_modal"):
-        show_modal()
-        st.stop()
-
-    if uploaded_images and title and description and not st.session_state.get("show_modal"):
+    if uploaded_images and title and description and not st.session_state["show_modal"]:
             slug = slugify(title)
             with temp_workspace() as tmpdir:
                 # save images
@@ -192,9 +153,9 @@ if mode == "Single Product":
                     st.stop()
 
                 st.subheader(title)
-                if st.session_state['render_choice'] in ("Video only", "Video + Blog"):
+                if st.session_state["render_choice"] in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
-                if st.session_state['render_choice'] in ("Blog only", "Video + Blog"):
+                if st.session_state["render_choice"] in ("Blog only", "Video + Blog"):
                     st.markdown("**Blog Content**")
                     st.write(open(result.blog_file, 'r', encoding='utf-8').read())
 
@@ -221,16 +182,11 @@ else:
     if st.button("Run Batch"):
         if not up_csv:
             st.error("📂 Please upload a Products CSV.")
-            st.stop()
         else:
-            st.session_state['show_modal'] = True
-            st.experimental_rerun()
+            st.session_state["show_modal"] = True
+            st.rerun()
 
-    if st.session_state.get("show_modal"):
-        show_modal()
-        st.stop()
-
-    if up_csv and not st.session_state.get("show_modal"):
+    if up_csv and not st.session_state["show_modal"]:
         # Load CSV
         with temp_workspace() as master_tmp:
             # Save & read CSV
