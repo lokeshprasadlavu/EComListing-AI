@@ -73,67 +73,51 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# Default states
-if "render_choice" not in st.session_state:
-    st.session_state["render_choice"] = "Video + Blog"
-
-if "show_modal" not in st.session_state:
-    st.session_state["show_modal"] = False
-
-# Modal UI
-from streamlit.components.v1 import html
-
 def show_modal():
-    html("""
-    <style>
-    .modal {
-      display: block;
-      position: fixed;
-      z-index: 1000;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      background-color: rgba(0,0,0,0.4);
-    }
-    .modal-content {
-      background-color: #fff;
-      margin: 15% auto;
-      padding: 30px;
-      border: 1px solid #888;
-      width: 40%;
-      border-radius: 12px;
-      text-align: center;
-    }
-    .modal-content button {
-      margin: 10px;
-      padding: 10px 20px;
-      font-size: 16px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    </style>
-    <div class="modal">
-      <div class="modal-content">
-        <h3>Select Output Type:</h3>
-        <form method="get">
-          <button name="choice" value="Video + Blog" style="background-color:#007bff;color:white;">Video + Blog</button>
-          <button name="choice" value="Video only" style="background-color:#28a745;color:white;">Video only</button>
-          <button name="choice" value="Blog only" style="background-color:#ffc107;color:black;">Blog only</button>
-        </form>
-      </div>
-    </div>
-    """, height=400)
+    with st.container():
+        st.markdown("""
+            <style>
+            .overlay {
+                position: fixed;
+                top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .modal-box {
+                background: white;
+                padding: 30px;
+                border-radius: 12px;
+                text-align: center;
+            }
+            </style>
+            <div class="overlay">
+              <div class="modal-box">
+                <h4>Select Output Type:</h4>
+            """, unsafe_allow_html=True)
 
-# --- Handle popup selection ---
-query_params = st.query_params
-if "choice" in query_params:
-    st.session_state['render_choice'] = query_params["choice"][0]
-    st.session_state['show_modal'] = False
-    st.query_params.clear()
-    st.rerun()
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("📹 Video + Blog"):
+                st.session_state["render_choice"] = "Video + Blog"
+                st.session_state["show_modal"] = False
+                st.rerun()
+        with col2:
+            if st.button("🎞️ Video only"):
+                st.session_state["render_choice"] = "Video only"
+                st.session_state["show_modal"] = False
+                st.rerun()
+        with col3:
+            if st.button("📝 Blog only"):
+                st.session_state["render_choice"] = "Blog only"
+                st.session_state["show_modal"] = False
+                st.rerun()
+
+        st.markdown("</div></div>", unsafe_allow_html=True)
+
 
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
