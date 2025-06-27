@@ -90,12 +90,20 @@ if mode == "Single Product":
         type=["png","jpg","jpeg"], accept_multiple_files=True
     )
 
+    if "show_single_modal" not in st.session_state:
+        st.session_state["show_single_modal"] = False
+
     if st.button("Generate"):
-        with st.modal("Select what to render"):
-            render_choice = st.radio("What would you like to generate?",["Video + Blog", "Video only", "Blog only"])
-            if st.button("Confirm", key="single_confirm"):
-                st.session_state['single_render_choice'] = render_choice
-                st.rerun()
+        st.session_state["show_single_modal"] = True
+
+    if st.session_state["show_single_modal"]:
+        st.subheader("🛠️ Select what to render")
+        render_choice = st.radio("What would you like to generate?", ["Video + Blog", "Video only", "Blog only"], key="single_render_choice_radio")
+
+        if st.button("Confirm", key="single_confirm"):
+            st.session_state["single_render_choice"] = render_choice
+            st.session_state["show_single_modal"] = False
+            st.rerun()
 
     if 'single_render_choice' in st.session_state:
         render_choice = st.session_state['single_render_choice']
