@@ -1,9 +1,6 @@
 import os
 import json
-import tempfile
-import time
 import glob
-import re
 
 import streamlit as st
 import pandas as pd
@@ -13,7 +10,6 @@ from auth import get_openai_client, init_drive_service
 import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
-from jsonschema import ValidationError
 
 # ─── Load & validate config ─────────────────────────────────────────────────
 cfg = load_config()
