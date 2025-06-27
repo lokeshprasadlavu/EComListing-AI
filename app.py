@@ -107,6 +107,7 @@ if st.session_state["show_modal"]:
 
 
 
+
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 

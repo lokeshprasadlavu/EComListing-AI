@@ -9,13 +9,13 @@ module.exports = {
     libraryTarget: "umd",
   },
   resolve: {
-    extensions: [".ts", ".tsx", ".js"],
+    extensions: [".ts", ".tsx", ".js"]
   },
   module: {
     rules: [
       {
         test: /\.tsx?$/,
-        loader: "ts-loader",
+        use: "ts-loader",
         exclude: /node_modules/,
       },
     ],
