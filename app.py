@@ -119,6 +119,16 @@ def is_valid_batch_folder(folder):
 
 # ─── UI Mode ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
+# ─── UI Mode ───
+mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"], key="app_mode")
+
+# Reset the radio visibility flags when switching modes
+if "last_mode" not in st.session_state:
+    st.session_state.last_mode = mode
+elif st.session_state.last_mode != mode:
+    st.session_state.show_output_radio_single = False
+    st.session_state.show_output_radio_batch = False
+    st.session_state.last_mode = mode
 
 # ─── Single Product ───
 if mode == "Single Product":
