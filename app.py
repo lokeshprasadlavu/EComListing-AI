@@ -245,7 +245,7 @@ else:
             try:
                 generate_batch_from_csv(cfg=svc_cfg, images_data=st.session_state.batch_images_data)
             except GenerationError as ge:
-                st.error(f"⚠️ Generation failed: {ge}")
+                st.error(ge)
                 st.stop()
 
             for sub in os.listdir(svc_cfg.output_base_folder):
