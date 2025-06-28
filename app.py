@@ -14,28 +14,6 @@ import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
-# 🔁 Auto-refresh every 30 seconds
-st_autorefresh(interval=30 * 1000, key="autorefresh")
-
-# ─── Session Timeout Config ───
-SESSION_TIMEOUT_SECONDS = 120  # 5 minutes
-
-def reset_session_if_timed_out():
-    now = time.time()
-    last_active = st.session_state.get("last_active_ts", now)
-    if now - last_active > SESSION_TIMEOUT_SECONDS:
-        for key in [
-            "show_output_radio_single", "show_output_radio_batch",
-            "last_single_result", "last_batch_folder",
-            "batch_csv_path", "batch_json_path", "batch_images_data"
-        ]:
-            st.session_state.pop(key, None)
-        st.warning("Session has been reset due to 5 minutes of inactivity. Refreshing...")
-        st.rerun()
-    st.session_state["last_active_ts"] = now
-
-reset_session_if_timed_out()
-
 # ─── Config and Services ───
 cfg = load_config()
 openai = get_openai_client(cfg.openai_api_key)
