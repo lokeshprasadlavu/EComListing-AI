@@ -144,7 +144,6 @@ if mode == "Single Product":
             if st.session_state.last_single_result:
                 render_single_output()
             else:
-                st.session_state.show_output_radio_single = False
                 slug = slugify(title)
                 with temp_workspace() as tmpdir:
                     image_urls = []
@@ -179,7 +178,6 @@ if mode == "Single Product":
                         st.stop()
 
                     st.session_state.last_single_result = result
-                    render_single_output()
 
                     prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
                     try:
@@ -194,6 +192,8 @@ if mode == "Single Product":
                     except Exception as e:
                         st.warning(f"⚠️ Failed to upload to Database: {e}")
 
+            render_single_output()
+
 # ─── Batch CSV Mode ───
 else:
     st.header("Generate Video & Blog for a Batch of Products")
@@ -205,11 +205,8 @@ else:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
 
-        if st.session_state.batch_csv_path and os.path.exists(st.session_state.batch_csv_path):
-            pass
-        else:
-            with temp_workspace() as tmp:             
-                csv_path = os.path.join(tmp, up_csv.name)
+        with temp_workspace() as tmp:             
+            csv_path = os.path.join(tmp, up_csv.name)
             with open(csv_path, "wb") as f:
                 f.write(up_csv.getbuffer())
             df = pd.read_csv(csv_path)
@@ -245,8 +242,8 @@ else:
             st.session_state.batch_csv_path = csv_path
             st.session_state.batch_json_path = json_path if img_col is None else ""
             st.session_state.batch_images_data = images_data
-        st.session_state.last_batch_folder = None
-        st.session_state.show_output_radio_batch = True
+            st.session_state.last_batch_folder = None
+            st.session_state.show_output_radio_batch = True
 
     if st.session_state.show_output_radio_batch:
         current_option = st.radio(
@@ -261,8 +258,6 @@ else:
             if st.session_state.last_batch_folder:
                 render_batch_output()
             else:
-                st.session_state.show_output_radio_batch = False
-
                 svc_cfg = ServiceConfig(
                     csv_file=st.session_state.batch_csv_path,
                     images_json=st.session_state.batch_json_path,
@@ -279,7 +274,6 @@ else:
                     st.stop()
 
                 st.session_state.last_batch_folder = svc_cfg.output_base_folder
-                render_batch_output()
 
                 for sub in os.listdir(svc_cfg.output_base_folder):
                     subdir = os.path.join(svc_cfg.output_base_folder, sub)
@@ -299,3 +293,5 @@ else:
                                 )
                             except Exception as e:
                                 st.warning(f"⚠️ Failed to upload to Database: {e}")
+
+            render_batch_output()
