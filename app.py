@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 
 from config import load_config
@@ -14,10 +15,15 @@ import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
+# 🔁 Auto-refresh every 30 seconds to catch timeout early
+st_autorefresh(interval=30 * 1000, key="autorefresh")
+
 # ─── Session Timeout Config ───
-SESSION_TIMEOUT_SECONDS = 120  # 5 minutes
+SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
 
 def reset_session_if_timed_out():
+    # Perform a UI refresh after session timeout to reset everything visually
+        now = time.time()
     now = time.time()
     last_active = st.session_state.get("last_active_ts", now)
     if now - last_active > SESSION_TIMEOUT_SECONDS:
@@ -27,7 +33,7 @@ def reset_session_if_timed_out():
             "batch_csv_path", "batch_json_path", "batch_images_data"
         ]:
             st.session_state.pop(key, None)
-        st.warning("Session has been reset due to 5 minutes of inactivity. Please re-upload your inputs.")
+        st.warning("Session has been reset due to 5 minutes of inactivity. Refreshing...")
         st.rerun()
     st.session_state["last_active_ts"] = now
 
@@ -337,5 +343,4 @@ def is_valid_single_result(result):
 
 def is_valid_batch_folder(folder):
     return folder and os.path.exists(folder) and any(os.listdir(folder))
-
 
