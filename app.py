@@ -1,6 +1,7 @@
 import os
 import json
 import glob
+import tempfile
 
 import streamlit as st
 import pandas as pd
@@ -177,7 +178,10 @@ else:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
 
-        with temp_workspace() as tmp:
+        if "session_temp_dir" not in st.session_state:
+            st.session_state.session_temp_dir = tempfile.mkdtemp()
+            tmp = st.session_state.session_temp_dir
+            
             csv_path = os.path.join(tmp, up_csv.name)
             with open(csv_path, "wb") as f:
                 f.write(up_csv.getbuffer())
@@ -266,4 +270,3 @@ else:
                             )
                         except Exception as e:
                             st.warning(f"⚠️ Failed to upload to Database: {e}")
-
