@@ -131,6 +131,8 @@ def render_batch_output():
             st.markdown("**Blog Content**")
             st.write(open(blog, 'r').read())
 
+# Additional safeguard against missing temp files
+
 # ─── Mode Selector ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
@@ -161,58 +163,62 @@ if mode == "Single Product":
         st.session_state.output_options = current_option
 
         if st.button("Continue", key="continue_single"):
-            if st.session_state.last_single_result:
+            result = st.session_state.last_single_result
+            if result and not is_valid_single_result(result):
+                st.warning("Previous session expired. Please regenerate.")
+                st.session_state.last_single_result = None
+            elif result:
                 render_single_output()
-            else:
-                slug = slugify(title)
-                with temp_workspace() as tmpdir:
-                    image_urls = []
-                    for up in uploaded_images:
-                        p = os.path.join(tmpdir, up.name)
-                        with open(p, 'wb') as f: f.write(up.getbuffer())
-                        image_urls.append(p)
+                st.stop()
 
-                    svc_cfg = ServiceConfig(
-                        csv_file='',
-                        images_json='',
-                        audio_folder=tmpdir,
-                        fonts_zip_path=fonts_folder,
-                        logo_path=logo_path,
-                        output_base_folder=tmpdir,
+            slug = slugify(title)
+            with temp_workspace() as tmpdir:
+                image_urls = []
+                for up in uploaded_images:
+                    p = os.path.join(tmpdir, up.name)
+                    with open(p, 'wb') as f: f.write(up.getbuffer())
+                    image_urls.append(p)
+
+                svc_cfg = ServiceConfig(
+                    csv_file='',
+                    images_json='',
+                    audio_folder=tmpdir,
+                    fonts_zip_path=fonts_folder,
+                    logo_path=logo_path,
+                    output_base_folder=tmpdir,
+                )
+
+                try:
+                    result = generate_for_single(
+                        cfg=svc_cfg,
+                        listing_id=None,
+                        product_id=None,
+                        title=title,
+                        description=description,
+                        image_urls=image_urls,
                     )
+                except GenerationError as ge:
+                    st.error(str(ge))
+                    st.stop()
+                except Exception:
+                    st.error("⚠️ An unexpected error occurred. Please try again later.")
+                    st.stop()
 
-                    try:
-                        result = generate_for_single(
-                            cfg=svc_cfg,
-                            listing_id=None,
-                            product_id=None,
-                            title=title,
-                            description=description,
-                            image_urls=image_urls,
+                st.session_state.last_single_result = result
+                render_single_output()
+
+                prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
+                try:
+                    for path in [result.video_path, result.title_file, result.blog_file]:
+                        mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
+                        drive_db.upload_file(
+                            name=os.path.basename(path),
+                            data=open(path,'rb').read(),
+                            mime_type=mime,
+                            parent_id=prod_f
                         )
-                    except GenerationError as ge:
-                        st.error(str(ge))
-                        st.stop()
-                    except Exception:
-                        st.error("⚠️ An unexpected error occurred. Please try again later.")
-                        st.stop()
-
-                    st.session_state.last_single_result = result
-
-                    prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
-                    try:
-                        for path in [result.video_path, result.title_file, result.blog_file]:
-                            mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                            drive_db.upload_file(
-                                name=os.path.basename(path),
-                                data=open(path,'rb').read(),
-                                mime_type=mime,
-                                parent_id=prod_f
-                            )
-                    except Exception as e:
-                        st.warning(f"⚠️ Failed to upload to Database: {e}")
-
-            render_single_output()
+                except Exception as e:
+                    st.warning(f"⚠️ Failed to upload to Database: {e}")
 
 # ─── Batch CSV Mode ───
 else:
@@ -275,44 +281,59 @@ else:
         st.session_state.output_options = current_option
 
         if st.button("Continue", key="continue_batch"):
+            folder = st.session_state.last_batch_folder
+            if folder and not is_valid_batch_folder(folder):
+                st.warning("Previous batch session expired. Please rerun batch generation.")
+                st.session_state.last_batch_folder = None
+
             if st.session_state.last_batch_folder:
                 render_batch_output()
-            else:
-                svc_cfg = ServiceConfig(
-                    csv_file=st.session_state.batch_csv_path,
-                    images_json=st.session_state.batch_json_path,
-                    audio_folder=os.path.dirname(st.session_state.batch_csv_path),
-                    fonts_zip_path=fonts_folder,
-                    logo_path=logo_path,
-                    output_base_folder=os.path.dirname(st.session_state.batch_csv_path),
-                )
+                st.stop()
 
-                try:
-                    generate_batch_from_csv(cfg=svc_cfg, images_data=st.session_state.batch_images_data)
-                except GenerationError as ge:
-                    st.error(ge)
-                    st.stop()
+            svc_cfg = ServiceConfig(
+                csv_file=st.session_state.batch_csv_path,
+                images_json=st.session_state.batch_json_path,
+                audio_folder=os.path.dirname(st.session_state.batch_csv_path),
+                fonts_zip_path=fonts_folder,
+                logo_path=logo_path,
+                output_base_folder=os.path.dirname(st.session_state.batch_csv_path),
+            )
 
-                st.session_state.last_batch_folder = svc_cfg.output_base_folder
+            try:
+                generate_batch_from_csv(cfg=svc_cfg, images_data=st.session_state.batch_images_data)
+            except GenerationError as ge:
+                st.error(ge)
+                st.stop()
 
-                for sub in os.listdir(svc_cfg.output_base_folder):
-                    subdir = os.path.join(svc_cfg.output_base_folder, sub)
-                    if not os.path.isdir(subdir):
-                        continue
+            st.session_state.last_batch_folder = svc_cfg.output_base_folder
 
-                    prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
-                    for path in glob.glob(os.path.join(subdir, '*')):
-                        if path.lower().endswith(('.mp4', '.txt')):
-                            try:
-                                mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                                drive_db.upload_file(
-                                    name=os.path.basename(path),
-                                    data=open(path, 'rb').read(),
-                                    mime_type=mime,
-                                    parent_id=prod_f
-                                )
-                            except Exception as e:
-                                st.warning(f"⚠️ Failed to upload to Database: {e}")
+            for sub in os.listdir(svc_cfg.output_base_folder):
+                subdir = os.path.join(svc_cfg.output_base_folder, sub)
+                if not os.path.isdir(subdir):
+                    continue
+
+                prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
+                for path in glob.glob(os.path.join(subdir, '*')):
+                    if path.lower().endswith(('.mp4', '.txt')):
+                        try:
+                            mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
+                            drive_db.upload_file(
+                                name=os.path.basename(path),
+                                data=open(path, 'rb').read(),
+                                mime_type=mime,
+                                parent_id=prod_f
+                            )
+                        except Exception as e:
+                            st.warning(f"⚠️ Failed to upload to Database: {e}")
 
             render_batch_output()
+
+
+def is_valid_single_result(result):
+    return result and (
+        os.path.exists(result.video_path) or os.path.exists(result.blog_file)
+    )
+
+def is_valid_batch_folder(folder):
+    return folder and os.path.exists(folder) and any(os.listdir(folder))
 
