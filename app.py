@@ -3,7 +3,6 @@ import json
 import glob
 import tempfile
 import time
-from datetime import datetime, timedelta
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -15,7 +14,7 @@ import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
-# 🔁 Auto-refresh every 30 seconds to check for session timeout
+# 🔁 Auto-refresh every 30 seconds
 st_autorefresh(interval=30 * 1000, key="autorefresh")
 
 # ─── Session Timeout Config ───
@@ -37,13 +36,10 @@ def reset_session_if_timed_out():
 
 reset_session_if_timed_out()
 
-# ─── Load & validate config ───
+# ─── Config and Services ───
 cfg = load_config()
-
-# ─── Initialize OpenAI client ───
 openai = get_openai_client(cfg.openai_api_key)
 
-# ─── Initialize Drive DB & create top-level folders ───
 drive_db.DRIVE_FOLDER_ID = cfg.drive_folder_id
 with st.spinner("Connecting to Drive…"):
     try:
@@ -61,7 +57,7 @@ except Exception as e:
     st.error(f"⚠️ Database setup failed: {e}")
     st.stop()
 
-# ─── Preload fonts & logo ───
+# ─── Preload Fonts and Logo ───
 @st.cache_data(show_spinner=False)
 def preload_fonts(fonts_folder_id):
     with temp_workspace() as td:
@@ -136,7 +132,7 @@ def render_batch_output():
             st.markdown("**Blog Content**")
             st.write(open(blog, 'r').read())
 
-# ─── File Validity Check Helpers ───
+# ─── Helpers ───
 def is_valid_single_result(result):
     return result and (
         os.path.exists(result.video_path) or os.path.exists(result.blog_file)
@@ -145,22 +141,22 @@ def is_valid_single_result(result):
 def is_valid_batch_folder(folder):
     return folder and os.path.exists(folder) and any(os.listdir(folder))
 
-# ─── Mode Selector ───
+# ─── UI Mode ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
-# ─── Single Product Mode ───
+# ─── Single Product ───
 if mode == "Single Product":
     st.header("Generate Video & Blog for a Single Product")
     title       = st.text_input("Product Title")
     description = st.text_area("Product Description", height=150)
     uploaded_images = st.file_uploader(
         "Upload Product Images (PNG/JPG)",
-        type=["png","jpg","jpeg"], accept_multiple_files=True
+        type=["png", "jpg", "jpeg"], accept_multiple_files=True
     )
 
     if st.button("Generate"):
         if not all([title, description, uploaded_images]):
-            st.error("Please enter title, description, and upload images(at least one).")
+            st.error("Please enter title, description, and upload images (at least one).")
         else:
             st.session_state.show_output_radio_single = True
             st.session_state.last_single_result = None
@@ -169,7 +165,8 @@ if mode == "Single Product":
         current_option = st.radio(
             "Choose which outputs to render:",
             ("Video only", "Blog only", "Video + Blog"),
-            index=(0 if st.session_state.output_options == "Video only" else 1 if st.session_state.output_options == "Blog only" else 2),
+            index=(0 if st.session_state.output_options == "Video only" else
+                   1 if st.session_state.output_options == "Blog only" else 2),
             key="output_choice_single"
         )
         st.session_state.output_options = current_option
@@ -225,13 +222,14 @@ if mode == "Single Product":
                         mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
                         drive_db.upload_file(
                             name=os.path.basename(path),
-                            data=open(path,'rb').read(),
+                            data=open(path, 'rb').read(),
                             mime_type=mime,
                             parent_id=prod_f
                         )
                 except Exception as e:
                     st.warning(f"⚠️ Failed to upload to Database: {e}")
 
+# ─── Batch CSV Mode ───
 # ─── Batch CSV Mode ───
 else:
     st.header("Generate Video & Blog for a Batch of Products")
@@ -262,7 +260,7 @@ else:
 
             if img_col is None:
                 if not up_json:
-                    st.error("📂 Please upload a CSV with a product images URLs column or upload a valid Images JSON.")
+                    st.error("📂 Please upload a CSV with product image URLs or an Images JSON.")
                     st.stop()
 
                 json_path = os.path.join(tmp, up_json.name)
@@ -287,7 +285,8 @@ else:
         current_option = st.radio(
             "Choose which outputs to render:",
             ("Video only", "Blog only", "Video + Blog"),
-            index=(0 if st.session_state.output_options == "Video only" else 1 if st.session_state.output_options == "Blog only" else 2),
+            index=(0 if st.session_state.output_options == "Video only" else
+                   1 if st.session_state.output_options == "Blog only" else 2),
             key="output_choice_batch"
         )
         st.session_state.output_options = current_option
