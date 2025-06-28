@@ -28,6 +28,7 @@ def reset_session_if_timed_out():
         ]:
             st.session_state.pop(key, None)
         st.warning("Session has been reset due to 5 minutes of inactivity. Please re-upload your inputs.")
+        st.rerun()
     st.session_state["last_active_ts"] = now
 
 reset_session_if_timed_out()
