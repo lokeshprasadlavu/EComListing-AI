@@ -69,28 +69,61 @@ st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# Let User Select Output Options ──────────────────────────────────────────────
-if "output_options" not in st.session_state:
-    st.session_state.output_options = "Video + Blog"
+# ─── Session State Defaults ───
+def init_session_state():
+    st.session_state.setdefault("output_options", "Video + Blog")
+    st.session_state.setdefault("show_output_radio_single", False)
+    st.session_state.setdefault("show_output_radio_batch", False)
+    st.session_state.setdefault("last_single_result", None)
+    st.session_state.setdefault("last_batch_folder", None)
+    st.session_state.setdefault("batch_csv_path", None)
+    st.session_state.setdefault("batch_json_path", None)
+    st.session_state.setdefault("batch_images_data", [])
 
-if "show_output_radio_single" not in st.session_state:
-    st.session_state["show_output_radio_single"] = False
-if "show_output_radio_batch" not in st.session_state:
-    st.session_state["show_output_radio_batch"] = False
-if "batch_csv_path" not in st.session_state:
-    st.session_state.batch_csv_path = None
-if "batch_json_path" not in st.session_state:
-    st.session_state.batch_json_path = None
-if "batch_images_data" not in st.session_state:
-    st.session_state.batch_images_data = []
+init_session_state()
 
+# ─── Utility: Output Selection ───
 def ask_output_choice(key="output_choice"):
     st.session_state.output_options = st.radio(
-        "Choose the options to generate:",
-        ("Video only", "Blog only", "Video & Blog"),
+        "Choose which outputs to render:",
+        ("Video only", "Blog only", "Video + Blog"),
         index=2,
         key=key
     )
+
+# ─── Utility: Render Outputs ───
+def render_single_output():
+    result = st.session_state.last_single_result
+    if result:
+        st.subheader(result.title)
+        if st.session_state.output_options in ("Video only", "Video + Blog"):
+            st.video(result.video_path)
+        if st.session_state.output_options in ("Blog only", "Video + Blog"):
+            st.markdown("**Blog Content**")
+            st.write(open(result.blog_file, 'r', encoding='utf-8').read())
+
+def render_batch_output():
+    folder = st.session_state.last_batch_folder
+    if not folder:
+        return
+    for sub in os.listdir(folder):
+        subdir = os.path.join(folder, sub)
+        if not os.path.isdir(subdir):
+            continue
+        st.subheader(f"Results for {sub}")
+        vid = os.path.join(subdir, f"{sub}.mp4")
+        blog = os.path.join(subdir, f"{sub}_blog.txt")
+        if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
+            st.video(vid)
+        if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+            st.markdown("**Blog Content**")
+            st.write(open(blog, 'r').read())
+
+# ─── Output Re-rendering ───
+if st.session_state.last_single_result:
+    render_single_output()
+if st.session_state.last_batch_folder:
+    render_batch_output()
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
