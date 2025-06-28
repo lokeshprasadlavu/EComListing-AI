@@ -77,7 +77,12 @@ if "show_output_radio_single" not in st.session_state:
     st.session_state["show_output_radio_single"] = False
 if "show_output_radio_batch" not in st.session_state:
     st.session_state["show_output_radio_batch"] = False
-
+if "batch_csv_path" not in st.session_state:
+    st.session_state.batch_csv_path = None
+if "batch_json_path" not in st.session_state:
+    st.session_state.batch_json_path = None
+if "batch_images_data" not in st.session_state:
+    st.session_state.batch_images_data = []
 
 def ask_output_choice(key="output_choice"):
     st.session_state.output_options = st.radio(
@@ -178,11 +183,12 @@ else:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
 
-        if "session_temp_dir" not in st.session_state:
-            st.session_state.session_temp_dir = tempfile.mkdtemp()
-            tmp = st.session_state.session_temp_dir
-            
-            csv_path = os.path.join(tmp, up_csv.name)
+        # Reuse existing validated inputs if already uploaded
+        if st.session_state.batch_csv_path and os.path.exists(st.session_state.batch_csv_path):
+            pass  # Reuse
+        else:
+            with temp_workspace() as tmp:             
+                csv_path = os.path.join(tmp, up_csv.name)
             with open(csv_path, "wb") as f:
                 f.write(up_csv.getbuffer())
             df = pd.read_csv(csv_path)
@@ -219,7 +225,8 @@ else:
             st.session_state.batch_csv_path = csv_path
             st.session_state.batch_json_path = json_path if img_col is None else ""
             st.session_state.batch_images_data = images_data
-            st.session_state.show_output_radio_batch = True
+            
+        st.session_state.show_output_radio_batch = True
 
     if st.session_state.show_output_radio_batch:
         ask_output_choice("output_choice_batch")
