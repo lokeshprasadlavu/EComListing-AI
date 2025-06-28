@@ -15,7 +15,7 @@ from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
 # ─── Session Timeout Config ───
-SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+SESSION_TIMEOUT_SECONDS = 120  # 5 minutes
 
 def reset_session_if_timed_out():
     now = time.time()
@@ -336,4 +336,5 @@ def is_valid_single_result(result):
 
 def is_valid_batch_folder(folder):
     return folder and os.path.exists(folder) and any(os.listdir(folder))
+
 
