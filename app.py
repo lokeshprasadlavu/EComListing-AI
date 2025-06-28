@@ -19,22 +19,21 @@ from video_generation_service import generate_for_single, generate_batch_from_cs
 st_autorefresh(interval=30 * 1000, key="autorefresh")
 
 # ─── Session Timeout Config ───
-SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+SESSION_TIMEOUT_SECONDS = 120  # 5 minutes
 
 def reset_session_if_timed_out():
-    # Perform a UI refresh after session timeout to reset everything visually
-        now = time.time()
-        last_active = st.session_state.get("last_active_ts", now)
-        if now - last_active > SESSION_TIMEOUT_SECONDS:
-            for key in [
-                "show_output_radio_single", "show_output_radio_batch",
-                "last_single_result", "last_batch_folder",
-                "batch_csv_path", "batch_json_path", "batch_images_data"
-            ]:
-                st.session_state.pop(key, None)
-            st.warning("Session has been reset due to 5 minutes of inactivity. Refreshing...")
-            st.rerun()
-        st.session_state["last_active_ts"] = now
+    now = time.time()
+    last_active = st.session_state.get("last_active_ts", now)
+    if now - last_active > SESSION_TIMEOUT_SECONDS:
+        for key in [
+            "show_output_radio_single", "show_output_radio_batch",
+            "last_single_result", "last_batch_folder",
+            "batch_csv_path", "batch_json_path", "batch_images_data"
+        ]:
+            st.session_state.pop(key, None)
+        st.warning("Session has been reset due to 5 minutes of inactivity. Refreshing...")
+        st.rerun()
+    st.session_state["last_active_ts"] = now
 
 reset_session_if_timed_out()
 
@@ -137,7 +136,16 @@ def render_batch_output():
             st.markdown("**Blog Content**")
             st.write(open(blog, 'r').read())
 
-# Additional safeguard against missing temp files
+# ─── File Validity Check Helpers ───
+
+def is_valid_single_result(result):
+    return result and (
+        os.path.exists(result.video_path) or os.path.exists(result.blog_file)
+    )
+
+def is_valid_batch_folder(folder):
+    return folder and os.path.exists(folder) and any(os.listdir(folder))
+
 
 # ─── Mode Selector ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
