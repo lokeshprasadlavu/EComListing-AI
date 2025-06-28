@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import tempfile
+import uuid
 
 import streamlit as st
 import pandas as pd
@@ -68,15 +69,24 @@ st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
 
 # ─── Session State Defaults ───
 def init_session_state():
-    st.session_state.setdefault("output_options", "Video + Blog")
-    st.session_state.setdefault("show_output_radio_single", False)
-    st.session_state.setdefault("show_output_radio_batch", False)
-    st.session_state.setdefault("last_single_result", None)
-    st.session_state.setdefault("last_batch_folder", None)
-    st.session_state.setdefault("batch_csv_path", None)
-    st.session_state.setdefault("batch_json_path", None)
-    st.session_state.setdefault("batch_images_data", [])
-    st.session_state.setdefault("prev_output_choice", "Video + Blog")
+    defaults = {
+        "output_options": "Video + Blog",
+        "show_output_radio_single": False,
+        "show_output_radio_batch": False,
+        "last_single_result": None,
+        "last_batch_folder": None,
+        "batch_csv_path": None,
+        "batch_json_path": None,
+        "batch_images_data": [],
+        "title": "",
+        "description": "",
+        "uploaded_image_paths": [],
+        "batch_csv_file_path": None,
+        "batch_json_file_path": None,
+        "last_mode": "Single Product"
+    }
+    for key, val in defaults.items():
+        st.session_state.setdefault(key, val)
 
 init_session_state()
 
@@ -120,10 +130,7 @@ def is_valid_batch_folder(folder):
 # ─── UI Mode ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"], key="app_mode")
 
-# Reset the radio visibility flags when switching modes
-if "last_mode" not in st.session_state:
-    st.session_state.last_mode = mode
-elif st.session_state.last_mode != mode:
+if st.session_state.last_mode != mode:
     st.session_state.show_output_radio_single = False
     st.session_state.show_output_radio_batch = False
     st.session_state.last_mode = mode
@@ -131,15 +138,29 @@ elif st.session_state.last_mode != mode:
 # ─── Single Product ───
 if mode == "Single Product":
     st.header("Generate Video & Blog for a Single Product")
-    title       = st.text_input("Product Title")
-    description = st.text_area("Product Description", height=150)
+
+    # Persistent Inputs
+    st.session_state.title = st.text_input("Product Title", st.session_state.title)
+    st.session_state.description = st.text_area("Product Description", height=150, value=st.session_state.description)
+
     uploaded_images = st.file_uploader(
-        "Upload Product Images (PNG/JPG)",
-        type=["png", "jpg", "jpeg"], accept_multiple_files=True
+        "Upload Product Images (PNG/JPG)", type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True
     )
 
+    if uploaded_images:
+        saved_paths = []
+        for img in uploaded_images:
+            ext = os.path.splitext(img.name)[1]
+            filename = f"{uuid.uuid4().hex}{ext}"
+            path = os.path.join(tempfile.gettempdir(), filename)
+            with open(path, "wb") as f:
+                f.write(img.getvalue())
+            saved_paths.append(path)
+        st.session_state.uploaded_image_paths = saved_paths
+
     if st.button("Generate"):
-        if not all([title, description, uploaded_images]):
+        if not all([st.session_state.title, st.session_state.description, st.session_state.uploaded_image_paths]):
             st.error("Please enter title, description, and upload images (at least one).")
         else:
             st.session_state.show_output_radio_single = True
@@ -163,13 +184,15 @@ if mode == "Single Product":
                 render_single_output()
                 st.stop()
 
-            slug = slugify(title)
+            slug = slugify(st.session_state.title)
             with temp_workspace() as tmpdir:
                 image_urls = []
-                for up in uploaded_images:
-                    p = os.path.join(tmpdir, up.name)
-                    with open(p, 'wb') as f: f.write(up.getbuffer())
-                    image_urls.append(p)
+                for path in st.session_state.uploaded_image_paths:
+                    if os.path.exists(path):
+                        dst_path = os.path.join(tmpdir, os.path.basename(path))
+                        with open(path, 'rb') as src, open(dst_path, 'wb') as dst:
+                            dst.write(src.read())
+                        image_urls.append(dst_path)
 
                 svc_cfg = ServiceConfig(
                     csv_file='',
@@ -185,8 +208,8 @@ if mode == "Single Product":
                         cfg=svc_cfg,
                         listing_id=None,
                         product_id=None,
-                        title=title,
-                        description=description,
+                        title=st.session_state.title,
+                        description=st.session_state.description,
                         image_urls=image_urls,
                     )
                 except GenerationError as ge:
@@ -215,19 +238,29 @@ if mode == "Single Product":
 # ─── Batch CSV Mode ───
 else:
     st.header("Generate Video & Blog for a Batch of Products")
-    up_csv  = st.file_uploader("Upload Products CSV", type="csv")
+
+    up_csv = st.file_uploader("Upload Products CSV", type="csv")
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
+    if up_csv:
+        path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex}_{up_csv.name}")
+        with open(path, "wb") as f:
+            f.write(up_csv.getvalue())
+        st.session_state.batch_csv_file_path = path
+
+    if up_json:
+        path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex}_{up_json.name}")
+        with open(path, "wb") as f:
+            f.write(up_json.getvalue())
+        st.session_state.batch_json_file_path = path
+
     if st.button("Run Batch"):
-        if not up_csv:
+        if not st.session_state.batch_csv_file_path:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
 
-        with temp_workspace() as tmp:             
-            csv_path = os.path.join(tmp, up_csv.name)
-            with open(csv_path, "wb") as f:
-                f.write(up_csv.getbuffer())
-            df = pd.read_csv(csv_path)
+        with temp_workspace() as tmp:
+            df = pd.read_csv(st.session_state.batch_csv_file_path)
             df.columns = [c.strip() for c in df.columns]
 
             required_cols = {"Listing Id", "Product Id", "Title", "Description"}
@@ -238,18 +271,13 @@ else:
 
             img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
             images_data = []
-            json_path = ""
 
             if img_col is None:
-                if not up_json:
+                if not st.session_state.batch_json_file_path:
                     st.error("📂 Please upload a CSV with product image URLs or an Images JSON.")
                     st.stop()
 
-                json_path = os.path.join(tmp, up_json.name)
-                with open(json_path, "wb") as f:
-                    f.write(up_json.getbuffer())
-
-                images_data = json.load(open(json_path))
+                images_data = json.load(open(st.session_state.batch_json_file_path))
                 try:
                     with st.spinner("Validating Images JSON..."):
                         validate_images_json(images_data)
@@ -257,9 +285,9 @@ else:
                     st.error(str(e))
                     st.stop()
 
-            st.session_state.batch_csv_path = csv_path
-            st.session_state.batch_json_path = json_path if img_col is None else ""
             st.session_state.batch_images_data = images_data
+            st.session_state.batch_csv_path = st.session_state.batch_csv_file_path
+            st.session_state.batch_json_path = st.session_state.batch_json_file_path
             st.session_state.last_batch_folder = None
             st.session_state.show_output_radio_batch = True
 
@@ -294,7 +322,7 @@ else:
             try:
                 generate_batch_from_csv(cfg=svc_cfg, images_data=st.session_state.batch_images_data)
             except GenerationError as ge:
-                st.error(ge)
+                st.error(str(ge))
                 st.stop()
 
             st.session_state.last_batch_folder = svc_cfg.output_base_folder
