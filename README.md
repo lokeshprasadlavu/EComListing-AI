@@ -1,7 +1,7 @@
 
 # EComListing-AI: AI-Powered Multimedia Content Generator for eCommerce
 
-EComListing-AI helps eCommerce businesses create **engaging multimedia content** using AI — from a single product or entire catalogs.  
+EComListing-AI helps eCommerce businesses create **engaging multimedia content** using AI, for a single product or entire catalogs.  
 
 ✨ Generate **Videos**, 📝 **Blogs**, and soon, 🖼️ **AI-generated Images**, with zero design or editing effort.  
 📦 Outputs are automatically uploaded to **Google Drive** — with **YouTube** integration coming soon!
