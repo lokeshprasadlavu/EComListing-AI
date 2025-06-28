@@ -24,18 +24,17 @@ SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
 def reset_session_if_timed_out():
     # Perform a UI refresh after session timeout to reset everything visually
         now = time.time()
-    now = time.time()
-    last_active = st.session_state.get("last_active_ts", now)
-    if now - last_active > SESSION_TIMEOUT_SECONDS:
-        for key in [
-            "show_output_radio_single", "show_output_radio_batch",
-            "last_single_result", "last_batch_folder",
-            "batch_csv_path", "batch_json_path", "batch_images_data"
-        ]:
-            st.session_state.pop(key, None)
-        st.warning("Session has been reset due to 5 minutes of inactivity. Refreshing...")
-        st.rerun()
-    st.session_state["last_active_ts"] = now
+        last_active = st.session_state.get("last_active_ts", now)
+        if now - last_active > SESSION_TIMEOUT_SECONDS:
+            for key in [
+                "show_output_radio_single", "show_output_radio_batch",
+                "last_single_result", "last_batch_folder",
+                "batch_csv_path", "batch_json_path", "batch_images_data"
+            ]:
+                st.session_state.pop(key, None)
+            st.warning("Session has been reset due to 5 minutes of inactivity. Refreshing...")
+            st.rerun()
+        st.session_state["last_active_ts"] = now
 
 reset_session_if_timed_out()
 
