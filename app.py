@@ -18,7 +18,7 @@ from video_generation_service import generate_for_single, generate_batch_from_cs
 st_autorefresh(interval=30 * 1000, key="autorefresh")
 
 # ─── Session Timeout Config ───
-SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+SESSION_TIMEOUT_SECONDS = 120  # 5 minutes
 
 def reset_session_if_timed_out():
     now = time.time()
