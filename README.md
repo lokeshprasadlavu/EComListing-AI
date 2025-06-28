@@ -27,10 +27,6 @@ EComListing-AI helps eCommerce businesses create **engaging multimedia content**
   - Renders outputs in the UI
   - Uploads all files to Drive under structured folders
 
-### 🔹 Persistent Session State
-- Keeps your selections across mode switches
-- Resets mode-specific fields as needed
-
 ### 🔹 Google Drive Integration
 - Upload all output files to a defined folder in your Google Drive
 - Per-product folders keep results organized
@@ -151,12 +147,5 @@ EComListing-AI/
 3. Commit your changes: `git commit -m 'feat: added new feature'`  
 4. Push to branch: `git push origin feat/your-feature`  
 5. Open a Pull Request 🚀
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](./LICENSE)  
-© 2025 TrustClarity / EComListing-AI Team
 
 ---
