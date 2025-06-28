@@ -2,10 +2,8 @@ import os
 import json
 import glob
 import tempfile
-import time
 
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 
 from config import load_config
@@ -143,8 +141,7 @@ if mode == "Single Product":
         current_option = st.radio(
             "Choose which outputs to render:",
             ("Video only", "Blog only", "Video + Blog"),
-            index=(0 if st.session_state.output_options == "Video only" else
-                   1 if st.session_state.output_options == "Blog only" else 2),
+            index=("Video only", "Blog only", "Video + Blog").index(st.session_state.output_options),
             key="output_choice_single"
         )
         st.session_state.output_options = current_option
@@ -208,7 +205,6 @@ if mode == "Single Product":
                     st.warning(f"⚠️ Failed to upload to Database: {e}")
 
 # ─── Batch CSV Mode ───
-# ─── Batch CSV Mode ───
 else:
     st.header("Generate Video & Blog for a Batch of Products")
     up_csv  = st.file_uploader("Upload Products CSV", type="csv")
@@ -263,8 +259,7 @@ else:
         current_option = st.radio(
             "Choose which outputs to render:",
             ("Video only", "Blog only", "Video + Blog"),
-            index=(0 if st.session_state.output_options == "Video only" else
-                   1 if st.session_state.output_options == "Blog only" else 2),
+            index=("Video only", "Blog only", "Video + Blog").index(st.session_state.output_options),
             key="output_choice_batch"
         )
         st.session_state.output_options = current_option
