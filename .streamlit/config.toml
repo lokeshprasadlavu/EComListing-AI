@@ -1,0 +1,13 @@
+[theme]
+primaryColor = "#0A3D62"         # deep trust-blue
+backgroundColor = "#F7F9FC"      # soft off-white
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1D2545"           # dark navy text
+font = "sans serif"
+
+[theme.palette]
+accent = "#17A398"              # teal accent (buttons, links)
+error = "#E74C3C"
+warning = "#F39C12"
+info = "#3498DB"                # lighter blue
+success = "#27AE60"             # green for success messages
