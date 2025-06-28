@@ -20,6 +20,7 @@ openai = get_openai_client(cfg.openai_api_key)
 
 # ─── Initialize Drive DB & create top-level folders ───
 
+drive_db.DRIVE_FOLDER_ID = cfg.drive_folder_id
 with st.spinner("Connecting to Drive…"):
     try:
         svc = init_drive_service(oauth_cfg=cfg.oauth, sa_cfg=cfg.service_account)
@@ -79,6 +80,7 @@ def init_session_state():
     st.session_state.setdefault("batch_csv_path", None)
     st.session_state.setdefault("batch_json_path", None)
     st.session_state.setdefault("batch_images_data", [])
+    st.session_state.setdefault("prev_output_choice", "Video + Blog")
 
 init_session_state()
 
@@ -109,22 +111,6 @@ def render_batch_output():
         if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
             st.markdown("**Blog Content**")
             st.write(open(blog, 'r').read())
-            
-# ─── Output Option Selection ───
-with st.container():
-    prev_output_option = st.session_state.output_options
-    current_option = st.radio(
-        "Choose which outputs to render:",
-        ("Video only", "Blog only", "Video + Blog"),
-        index=(0 if prev_output_option == "Video only" else 1 if prev_output_option == "Blog only" else 2),
-        key="output_choice_main"
-    )
-    if current_option != prev_output_option:
-        st.session_state.output_options = current_option
-        if st.session_state.last_single_result:
-            render_single_output()
-        elif st.session_state.last_batch_folder:
-            render_batch_output()
 
 # ─── Mode Selector ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
@@ -146,6 +132,15 @@ if mode == "Single Product":
             st.session_state.show_output_radio_single = True
 
     if st.session_state.show_output_radio_single:
+        current_option = st.radio(
+            "Choose which outputs to render:",
+            ("Video only", "Blog only", "Video + Blog"),
+            index=(0 if st.session_state.output_options == "Video only" else 1 if st.session_state.output_options == "Blog only" else 2),
+            key="output_choice_single"
+        )
+        if current_option != st.session_state.output_options:
+            st.session_state.output_options = current_option
+
         if st.button("Continue", key="continue_single"):
             st.session_state.show_output_radio_single = False
             slug = slugify(title)
@@ -252,6 +247,15 @@ else:
         st.session_state.show_output_radio_batch = True
 
     if st.session_state.show_output_radio_batch:
+        current_option = st.radio(
+            "Choose which outputs to render:",
+            ("Video only", "Blog only", "Video + Blog"),
+            index=(0 if st.session_state.output_options == "Video only" else 1 if st.session_state.output_options == "Blog only" else 2),
+            key="output_choice_batch"
+        )
+        if current_option != st.session_state.output_options:
+            st.session_state.output_options = current_option
+
         if st.button("Continue", key="continue_batch"):
             st.session_state.show_output_radio_batch = False
 
