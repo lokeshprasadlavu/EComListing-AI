@@ -82,15 +82,6 @@ def init_session_state():
 
 init_session_state()
 
-# ─── Utility: Output Selection ───
-def ask_output_choice(key="output_choice"):
-    st.session_state.output_options = st.radio(
-        "Choose which outputs to render:",
-        ("Video only", "Blog only", "Video + Blog"),
-        index=2,
-        key=key
-    )
-
 # ─── Utility: Render Outputs ───
 def render_single_output():
     result = st.session_state.last_single_result
@@ -119,11 +110,22 @@ def render_batch_output():
             st.markdown("**Blog Content**")
             st.write(open(blog, 'r').read())
 
-# ─── Output Re-rendering ───
-if st.session_state.last_single_result:
-    render_single_output()
-if st.session_state.last_batch_folder:
-    render_batch_output()
+# ─── Output Option Selection ───
+prev_output_option = st.session_state.output_options
+st.session_state.output_options = st.radio(
+    "Choose which outputs to render:",
+    ("Video only", "Blog only", "Video + Blog"),
+    index=(0 if prev_output_option == "Video only" else 1 if prev_output_option == "Blog only" else 2),
+    key="output_choice_main"
+)
+
+# ─── Auto-render when output option changes ───
+if st.session_state.output_options != prev_output_option:
+    if st.session_state.last_single_result:
+        render_single_output()
+    elif st.session_state.last_batch_folder:
+        render_batch_output()
+
 
 # ─── Mode Selector ───────────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
