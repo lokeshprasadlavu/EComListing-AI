@@ -130,7 +130,20 @@ def is_valid_batch_folder(folder):
 # ─── UI Mode ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"], key="app_mode")
 
+# Reset fields when switching modes
 if st.session_state.last_mode != mode:
+    if mode == "Single Product":
+        st.session_state.title = ""
+        st.session_state.description = ""
+        st.session_state.uploaded_image_paths = []
+    elif mode == "Batch of Products":
+        st.session_state.batch_csv_file_path = None
+        st.session_state.batch_json_file_path = None
+        st.session_state.batch_csv_path = None
+        st.session_state.batch_json_path = None
+        st.session_state.batch_images_data = []
+        st.session_state.last_batch_folder = None
+
     st.session_state.show_output_radio_single = False
     st.session_state.show_output_radio_batch = False
     st.session_state.last_mode = mode
