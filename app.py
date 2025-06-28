@@ -118,8 +118,6 @@ def is_valid_batch_folder(folder):
     return folder and os.path.exists(folder) and any(os.listdir(folder))
 
 # ─── UI Mode ───
-mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
-# ─── UI Mode ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"], key="app_mode")
 
 # Reset the radio visibility flags when switching modes
