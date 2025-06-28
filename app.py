@@ -12,14 +12,14 @@ import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
-# ─── Load & validate config ─────────────────────────────────────────────────
+# ─── Load & validate config ───
 cfg = load_config()
 
-# ─── Initialize OpenAI client ─────────────────────────────────────────────────
+# ─── Initialize OpenAI client ───
 openai = get_openai_client(cfg.openai_api_key)
 
-# ─── Initialize Drive DB & create top-level folders ────────────────────────────
-drive_db.DRIVE_FOLDER_ID = cfg.drive_folder_id
+# ─── Initialize Drive DB & create top-level folders ───
+
 with st.spinner("Connecting to Drive…"):
     try:
         svc = init_drive_service(oauth_cfg=cfg.oauth, sa_cfg=cfg.service_account)
@@ -36,7 +36,7 @@ except Exception as e:
     st.error(f"⚠️ Database setup failed: {e}")
     st.stop()
 
-# ─── Preload fonts & logo ─────────────────────────────────────────────────────
+# ─── Preload fonts & logo ───
 @st.cache_data(show_spinner=False)
 def preload_fonts(fonts_folder_id):
     with temp_workspace() as td:
@@ -64,7 +64,7 @@ def preload_logo(logo_folder_id):
 fonts_folder = preload_fonts(fonts_id)
 logo_path    = preload_logo(logo_id)
 
-# ─── Page Config ─────────────────────────────────────────────────────────────
+# ─── Page Config ───
 st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
@@ -109,27 +109,27 @@ def render_batch_output():
         if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
             st.markdown("**Blog Content**")
             st.write(open(blog, 'r').read())
-
+            
 # ─── Output Option Selection ───
 with st.container():
     prev_output_option = st.session_state.output_options
-    st.session_state.output_options = st.radio(
+    current_option = st.radio(
         "Choose which outputs to render:",
         ("Video only", "Blog only", "Video + Blog"),
         index=(0 if prev_output_option == "Video only" else 1 if prev_output_option == "Blog only" else 2),
         key="output_choice_main"
     )
-
-    if st.session_state.output_options != prev_output_option:
+    if current_option != prev_output_option:
+        st.session_state.output_options = current_option
         if st.session_state.last_single_result:
             render_single_output()
         elif st.session_state.last_batch_folder:
             render_batch_output()
 
-# ─── Mode Selector ───────────────────────────────────────────────────────────
+# ─── Mode Selector ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
 
-# ─── Single Product Mode ─────────────────────────────────────────────────────
+# ─── Single Product Mode ───
 if mode == "Single Product":
     st.header("Generate Video & Blog for a Single Product")
     title       = st.text_input("Product Title")
@@ -146,12 +146,10 @@ if mode == "Single Product":
             st.session_state.show_output_radio_single = True
 
     if st.session_state.show_output_radio_single:
-        ask_output_choice("output_choice_single")
         if st.button("Continue", key="continue_single"):
             st.session_state.show_output_radio_single = False
             slug = slugify(title)
             with temp_workspace() as tmpdir:
-                # save images
                 image_urls = []
                 for up in uploaded_images:
                     p = os.path.join(tmpdir, up.name)
@@ -167,7 +165,6 @@ if mode == "Single Product":
                     output_base_folder=tmpdir,
                 )
 
-                # Generate & catch errors
                 try:
                     result = generate_for_single(
                         cfg=svc_cfg,
@@ -184,15 +181,9 @@ if mode == "Single Product":
                     st.error("⚠️ An unexpected error occurred. Please try again later.")
                     st.stop()
 
-                st.subheader(title)
-                if st.session_state.output_options in ("Video only", "Video + Blog"):
-                    st.video(result.video_path)
+                st.session_state.last_single_result = result
+                render_single_output()
 
-                if st.session_state.output_options in ("Blog only", "Video + Blog"):
-                    st.markdown("**Blog Content**")
-                    st.write(open(result.blog_file, 'r', encoding='utf-8').read())
-
-                # upload
                 prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
                 try:
                     for path in [result.video_path, result.title_file, result.blog_file]:
@@ -206,7 +197,7 @@ if mode == "Single Product":
                 except Exception as e:
                     st.warning(f"⚠️ Failed to upload to Database: {e}")
 
-# ─── Batch CSV Mode ──────────────────────────────────────────────────────────
+# ─── Batch CSV Mode ───
 else:
     st.header("Generate Video & Blog for a Batch of Products")
     up_csv  = st.file_uploader("Upload Products CSV", type="csv")
@@ -217,9 +208,8 @@ else:
             st.error("📂 Please upload a Products CSV.")
             st.stop()
 
-        # Reuse existing validated inputs if already uploaded
         if st.session_state.batch_csv_path and os.path.exists(st.session_state.batch_csv_path):
-            pass  # Reuse
+            pass
         else:
             with temp_workspace() as tmp:             
                 csv_path = os.path.join(tmp, up_csv.name)
@@ -255,15 +245,13 @@ else:
                     st.error(str(e))
                     st.stop()
 
-            # Save validated paths/data to session
             st.session_state.batch_csv_path = csv_path
             st.session_state.batch_json_path = json_path if img_col is None else ""
             st.session_state.batch_images_data = images_data
-            
+        
         st.session_state.show_output_radio_batch = True
 
     if st.session_state.show_output_radio_batch:
-        ask_output_choice("output_choice_batch")
         if st.button("Continue", key="continue_batch"):
             st.session_state.show_output_radio_batch = False
 
@@ -282,21 +270,13 @@ else:
                 st.error(ge)
                 st.stop()
 
+            st.session_state.last_batch_folder = svc_cfg.output_base_folder
+            render_batch_output()
+
             for sub in os.listdir(svc_cfg.output_base_folder):
                 subdir = os.path.join(svc_cfg.output_base_folder, sub)
                 if not os.path.isdir(subdir):
                     continue
-
-                st.subheader(f"Results for {sub}")
-                vid = os.path.join(subdir, f"{sub}.mp4")
-                blog = os.path.join(subdir, f"{sub}_blog.txt")
-
-                if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
-                    st.video(vid)
-
-                if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
-                    st.markdown("**Blog Content**")
-                    st.write(open(blog, 'r').read())
 
                 prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
                 for path in glob.glob(os.path.join(subdir, '*')):
