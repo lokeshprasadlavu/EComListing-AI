@@ -15,11 +15,11 @@ import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
-# 🔁 Auto-refresh every 30 seconds to catch timeout early
+# 🔁 Auto-refresh every 30 seconds to check for session timeout
 st_autorefresh(interval=30 * 1000, key="autorefresh")
 
 # ─── Session Timeout Config ───
-SESSION_TIMEOUT_SECONDS = 120  # 5 minutes
+SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
 
 def reset_session_if_timed_out():
     now = time.time()
@@ -137,7 +137,6 @@ def render_batch_output():
             st.write(open(blog, 'r').read())
 
 # ─── File Validity Check Helpers ───
-
 def is_valid_single_result(result):
     return result and (
         os.path.exists(result.video_path) or os.path.exists(result.blog_file)
@@ -145,7 +144,6 @@ def is_valid_single_result(result):
 
 def is_valid_batch_folder(folder):
     return folder and os.path.exists(folder) and any(os.listdir(folder))
-
 
 # ─── Mode Selector ───
 mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"])
@@ -341,13 +339,3 @@ else:
                             st.warning(f"⚠️ Failed to upload to Database: {e}")
 
             render_batch_output()
-
-
-def is_valid_single_result(result):
-    return result and (
-        os.path.exists(result.video_path) or os.path.exists(result.blog_file)
-    )
-
-def is_valid_batch_folder(folder):
-    return folder and os.path.exists(folder) and any(os.listdir(folder))
-
