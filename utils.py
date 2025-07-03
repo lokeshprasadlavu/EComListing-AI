@@ -109,7 +109,6 @@ def preload_fonts_from_drive(fonts_folder_id: str) -> str:
     log.warning("⚠️ No font zip found in Drive folder.")
     return None
 
-
 def preload_logo_from_drive(logo_folder_id: str) -> str:
     """Download the first image file in the logo folder."""
     logo_cache_dir = get_persistent_cache_dir("logo")

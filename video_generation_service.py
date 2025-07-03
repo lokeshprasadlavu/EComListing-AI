@@ -70,13 +70,20 @@ def generate_for_single(
         if not local_images:
             raise GenerationError("❌ No images downloaded – check your URLs.")
 
-        # Load logo
+        # Load and resize logo using Pillow
         logo_clip = None
         if cfg.logo_path and os.path.isfile(cfg.logo_path):
             try:
-                Image.open(cfg.logo_path).convert("RGBA")  # Validate
-                logo_clip = ImageClip(cfg.logo_path).set_duration(1)
-                logo_clip = logo_clip.resize(height=80).set_pos((10, 10))
+                # Open and resize using Pillow
+                logo_image = Image.open(cfg.logo_path).convert("RGBA")
+                resized_logo = logo_image.resize((150, 80), resample=Image.LANCZOS)
+
+                # Save resized logo to persistent cache
+                logo_cache_dir = get_persistent_cache_dir("logo")
+                resized_path = os.path.join(logo_cache_dir, "resized_logo.png")
+                resized_logo.save(resized_path)
+
+                logo_clip = ImageClip(resized_path).set_duration(1).set_pos((10, 10))
             except Exception as e:
                 log.warning(f"⚠️ Failed to process logo: {e}")
 
