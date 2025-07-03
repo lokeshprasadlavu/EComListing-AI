@@ -1,6 +1,7 @@
 import os
 import json
 import glob
+import shutil
 import tempfile
 import uuid
 import hashlib
@@ -154,42 +155,51 @@ if mode == "Single Product":
 
         if st.button("Continue", key="continue_single"):
             slug = slugify(st.session_state.title)
-            with temp_workspace() as tmpdir:
-                image_urls = []
-                for path in st.session_state.uploaded_image_paths:
-                    if os.path.exists(path):
-                        dst_path = os.path.join(tmpdir, os.path.basename(path))
-                        with open(path, 'rb') as src, open(dst_path, 'wb') as dst:
-                            dst.write(src.read())
-                        image_urls.append(dst_path)
+            output_dir = os.path.join(tempfile.gettempdir(), "outputs", slug)
+            os.makedirs(output_dir, exist_ok=True)
 
-                svc_cfg = ServiceConfig(
-                    csv_file='', images_json='',
-                    audio_folder=tmpdir,
-                    fonts_zip_path=fonts_folder,
-                    logo_path=logo_path,
-                    output_base_folder=tmpdir,
+            image_urls = []
+            for path in st.session_state.uploaded_image_paths:
+                if os.path.exists(path):
+                    dst_path = os.path.join(output_dir, os.path.basename(path))
+                    shutil.copy(path, dst_path)
+                    image_urls.append(dst_path)
+
+            svc_cfg = ServiceConfig(
+                csv_file='',
+                images_json='',
+                audio_folder=output_dir,
+                fonts_zip_path=fonts_folder,
+                logo_path=logo_path,
+                output_base_folder=output_dir,
+            )
+
+            try:
+                result = generate_for_single(
+                    cfg=svc_cfg,
+                    listing_id=None,
+                    product_id=None,
+                    title=st.session_state.title,
+                    description=st.session_state.description,
+                    image_urls=image_urls,
+                )
+                st.session_state.last_single_result = result
+                render_single_output()
+
+                # ✅ Upload outputs to Drive
+                upload_output_files_to_drive(
+                    result=None,
+                    parent_drive_id=outputs_id,
+                    product_slug=slug,
+                    folder_path=output_dir
                 )
 
-                try:
-                    result = generate_for_single(
-                        cfg=svc_cfg,
-                        listing_id=None,
-                        product_id=None,
-                        title=st.session_state.title,
-                        description=st.session_state.description,
-                        image_urls=image_urls,
-                    )
-                    st.session_state.last_single_result = result
-                    render_single_output()
-                    upload_output_files_to_drive(result, outputs_id, product_slug=slug)
-                except GenerationError as ge:
-                    st.error(str(ge))
-                    st.stop()
-                except Exception as e:
-                    st.error(
-                        f"⚠️ Unexpected error: {e}")
-                    st.stop()
+            except GenerationError as ge:
+                st.error(str(ge))
+                st.stop()
+            except Exception as e:
+                st.error(f"⚠️ Unexpected error: {e}")
+                st.stop()
 
 # ─── Batch Mode ───
 else:
@@ -252,13 +262,16 @@ else:
         st.session_state.output_options = select_output_options(st.session_state.output_options)
 
         if st.button("Continue", key="continue_batch"):
+            base_output = os.path.join(tempfile.gettempdir(), "outputs", "batch")
+            os.makedirs(base_output, exist_ok=True)
+
             svc_cfg = ServiceConfig(
                 csv_file=st.session_state.batch_csv_path,
                 images_json=st.session_state.batch_json_path,
-                audio_folder=os.path.dirname(st.session_state.batch_csv_path),
+                audio_folder=base_output,
                 fonts_zip_path=fonts_folder,
                 logo_path=logo_path,
-                output_base_folder=os.path.dirname(st.session_state.batch_csv_path),
+                output_base_folder=base_output,
             )
 
             try:
@@ -267,17 +280,12 @@ else:
                 st.error(str(ge))
                 st.stop()
 
-            st.session_state.last_batch_folder = svc_cfg.output_base_folder
-
-            for sub in os.listdir(svc_cfg.output_base_folder):
-                subdir = os.path.join(svc_cfg.output_base_folder, sub)
-                if not os.path.isdir(subdir):
-                    continue
+            st.session_state.last_batch_folder = base_output
             render_batch_output()
 
-            # Upload each product folder in the batch to Drive
-            for subdir in os.listdir(svc_cfg.output_base_folder):
-                full_path = os.path.join(svc_cfg.output_base_folder, subdir)
+            # ✅ Upload each folder to Drive
+            for subdir in os.listdir(base_output):
+                full_path = os.path.join(base_output, subdir)
                 if os.path.isdir(full_path):
                     try:
                         upload_output_files_to_drive(
@@ -288,3 +296,4 @@ else:
                         )
                     except Exception as e:
                         st.warning(f"⚠️ Failed to upload batch outputs for {subdir}: {e}")
+
