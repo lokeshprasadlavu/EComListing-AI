@@ -150,29 +150,37 @@ if mode == "Single Product":
             saved_paths.append(path)
 
     if st.button("Generate"):
+        # Always reset session state for a clean start
+        reset_session_state()
+
         if not title.strip() or not description.strip():
             st.error("❗ Please enter both title and description.")
             st.stop()
 
         if not uploaded_images:
-            st.error("❗ Please upload at least one product image.")
+            st.error("❗ Please upload at least one image.")
             st.stop()
-        input_signature = hashlib.md5(
+
+        # Save new inputs to session
+        saved_paths = []
+        for img in uploaded_images:
+            ext = os.path.splitext(img.name)[1]
+            filename = f"{uuid.uuid4().hex}{ext}"
+            path = os.path.join(tempfile.gettempdir(), filename)
+            with open(path, "wb") as f:
+                f.write(img.getvalue())
+            saved_paths.append(path)
+
+        st.session_state.title = title
+        st.session_state.description = description
+        st.session_state.uploaded_image_paths = saved_paths
+        st.session_state.input_signature = hashlib.md5(
             (title + description + "".join(sorted([img.name for img in uploaded_images]))).encode()
         ).hexdigest()
+        st.session_state.show_output_radio_single = True
 
-        if st.session_state.input_signature != input_signature:
-            st.session_state.update({
-                "title": title,
-                "description": description,
-                "uploaded_image_paths": saved_paths,
-                "show_output_radio_single": True,
-                "last_single_result": None,
-                "input_signature": input_signature
-            })
-        else:
-            st.warning("⚠️ No changes detected. Modify inputs before regenerating.")
-            st.stop()
+        # Force rerun to reset UI and reinitialize state cleanly
+        st.experimental_rerun()
 
 
     if st.session_state.show_output_radio_single:
