@@ -3,6 +3,7 @@ import json
 import glob
 import tempfile
 import uuid
+import hashlib
 
 import streamlit as st
 import pandas as pd
@@ -27,7 +28,7 @@ cfg = load_config()
 openai = get_openai_client(cfg.openai_api_key)
 
 drive_db.DRIVE_FOLDER_ID = cfg.drive_folder_id
-with st.spinner("Connecting to Drive…"):
+with st.spinner("🔄 Connecting to Drive…"):
     try:
         svc = init_drive_service(oauth_cfg=cfg.oauth, sa_cfg=cfg.service_account)
         drive_db.set_drive_service(svc)
@@ -40,13 +41,13 @@ try:
     fonts_id = drive_db.find_or_create_folder("fonts", parent_id=cfg.drive_folder_id)
     logo_id = drive_db.find_or_create_folder("logo", parent_id=cfg.drive_folder_id)
 except Exception as e:
-    st.error(f"⚠️ Database setup failed: {e}")
+    st.error(f"⚠️ Drive folder setup failed: {e}")
     st.stop()
 
 fonts_folder = preload_fonts_from_drive(fonts_id)
 logo_path = preload_logo_from_drive(logo_id)
 
-# ─── Session State Defaults ───
+# ─── Session State ───
 def init_session_state():
     defaults = {
         "output_options": "Video + Blog",
@@ -63,7 +64,7 @@ def init_session_state():
         "batch_csv_file_path": None,
         "batch_json_file_path": None,
         "last_mode": "Single Product",
-        "last_inputs_hash": None,
+        "input_signature": None,
     }
     for key, val in defaults.items():
         st.session_state.setdefault(key, val)
@@ -73,23 +74,22 @@ init_session_state()
 # ─── Page Config ───
 st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
-st.markdown("AI-Powered Multimedia Content for your eCommerce Listings.")
+st.markdown("🚀 AI-Powered Multimedia Content for your eCommerce Listings.")
 
-# ─── Mode Selector ───
-mode = st.sidebar.radio("Mode", ["Single Product", "Batch of Products"], key="app_mode")
-
-# Reset on mode change
+# ─── Mode ───
+mode = st.sidebar.radio("Choose Mode", ["Single Product", "Batch of Products"], key="app_mode")
 if st.session_state.last_mode != mode:
     st.session_state.update({
         "title": "", "description": "", "uploaded_image_paths": [],
-        "batch_csv_file_path": None, "batch_json_file_path": None,
-        "batch_csv_path": None, "batch_json_path": None, "batch_images_data": [],
-        "last_single_result": None, "last_batch_folder": None,
-        "show_output_radio_single": False, "show_output_radio_batch": False,
+        "batch_csv_path": None, "batch_json_path": None,
+        "batch_images_data": [], "last_single_result": None,
+        "last_batch_folder": None,
+        "show_output_radio_single": False,
+        "show_output_radio_batch": False,
     })
     st.session_state.last_mode = mode
 
-# ─── Utility ───
+# ─── Utilities ───
 def render_single_output():
     result = st.session_state.last_single_result
     if result:
@@ -115,16 +115,16 @@ def render_batch_output():
             st.video(vid)
         if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
             st.markdown("**Blog Content**")
-            st.write(open(blog, 'r').read())
+            st.write(open(blog, 'r', encoding='utf-8').read())
 
-# ─── Single Product ───
+# ─── Single Product Mode ───
 if mode == "Single Product":
-    st.header("Generate Video & Blog for a Single Product")
+    st.header("🎯 Single Product Generation")
 
     title = st.text_input("Product Title", st.session_state.title)
     description = st.text_area("Product Description", height=150, value=st.session_state.description)
+    uploaded_images = st.file_uploader("Upload Product Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-    uploaded_images = st.file_uploader("Upload Product Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
     saved_paths = []
     if uploaded_images:
         for img in uploaded_images:
@@ -136,17 +136,20 @@ if mode == "Single Product":
             saved_paths.append(path)
 
     if st.button("Generate"):
-        st.session_state.update({
-            "title": title,
-            "description": description,
-            "uploaded_image_paths": saved_paths,
-            "show_output_radio_single": True,
-            "last_single_result": None,
-        })
+        input_signature = hashlib.md5((title + description + "".join(sorted([img.name for img in uploaded_images]))).encode()).hexdigest()
+        if st.session_state.input_signature != input_signature:
+            st.session_state.update({
+                "title": title,
+                "description": description,
+                "uploaded_image_paths": saved_paths,
+                "show_output_radio_single": True,
+                "last_single_result": None,
+                "input_signature": input_signature
+            })
 
     if st.session_state.show_output_radio_single:
         st.session_state.output_options = st.radio(
-            "Choose outputs:",
+            "Choose outputs to render:",
             ("Video only", "Blog only", "Video + Blog"),
             index=("Video only", "Blog only", "Video + Blog").index(st.session_state.output_options)
         )
@@ -204,9 +207,9 @@ if mode == "Single Product":
 
 # ─── Batch Mode ───
 else:
-    st.header("Generate Video & Blog for a Batch of Products")
+    st.header("📦 Batch Generation")
 
-    up_csv = st.file_uploader("Upload CSV", type="csv")
+    up_csv = st.file_uploader("Upload Products CSV", type="csv")
     up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
 
     if up_csv:
@@ -222,43 +225,44 @@ else:
         st.session_state.batch_json_file_path = path
 
     if st.button("Run Batch"):
-        st.session_state.last_batch_folder = None
-        st.error("📂 Please upload a Products CSV.")
-        st.stop()
-        with temp_workspace() as tmp:
-            df = pd.read_csv(st.session_state.batch_csv_file_path)
-            df.columns = [c.strip() for c in df.columns]
+        if not st.session_state.batch_csv_file_path:
+            st.error("❗Please upload a valid Products CSV.")
+            st.stop()
 
-            required_cols = {"Listing Id", "Product Id", "Title", "Description"}
-            missing = required_cols - set(df.columns)
-            if missing:
-                st.error(f"❌ Missing columns: {', '.join(missing)}")
+        df = pd.read_csv(st.session_state.batch_csv_file_path)
+        df.columns = [c.strip() for c in df.columns]
+
+        required_cols = {"Listing Id", "Product Id", "Title", "Description"}
+        missing = required_cols - set(df.columns)
+        if missing:
+            st.error(f"❌ CSV is missing required columns: {', '.join(missing)}")
+            st.stop()
+
+        img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
+        images_data = []
+
+        if img_col is None:
+            if not st.session_state.batch_json_file_path:
+                st.error("❗Provide either image URLs in CSV or upload a valid JSON file.")
                 st.stop()
 
-            img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
-            images_data = []
+            images_data = json.load(open(st.session_state.batch_json_file_path))
+            try:
+                with st.spinner("Validating Images JSON..."):
+                    validate_images_json(images_data)
+            except ValueError as e:
+                st.error(str(e))
+                st.stop()
 
-            if img_col is None:
-                if not st.session_state.batch_json_file_path:
-                    st.error("📂 Provide either image URLs in CSV or upload a JSON file.")
-                    st.stop()
-
-                images_data = json.load(open(st.session_state.batch_json_file_path))
-                try:
-                    with st.spinner("Validating Images JSON..."):
-                        validate_images_json(images_data)
-                except ValueError as e:
-                    st.error(str(e))
-                    st.stop()
-
-            st.session_state.batch_images_data = images_data
-            st.session_state.batch_csv_path = st.session_state.batch_csv_file_path
-            st.session_state.batch_json_path = st.session_state.batch_json_file_path
-            st.session_state.show_output_radio_batch = True
+        st.session_state.batch_images_data = images_data
+        st.session_state.batch_csv_path = st.session_state.batch_csv_file_path
+        st.session_state.batch_json_path = st.session_state.batch_json_file_path
+        st.session_state.show_output_radio_batch = True
+        st.session_state.last_batch_folder = None
 
     if st.session_state.show_output_radio_batch:
         st.session_state.output_options = st.radio(
-            "Choose outputs:",
+            "Choose outputs to render:",
             ("Video only", "Blog only", "Video + Blog"),
             index=("Video only", "Blog only", "Video + Blog").index(st.session_state.output_options)
         )
@@ -298,6 +302,6 @@ else:
                                 parent_id=prod_f
                             )
                         except Exception as e:
-                            st.warning(f"❌ Upload failed for {path}: {e}")
+                            st.warning(f"⚠️ Failed to upload {os.path.basename(path)}: {e}")
 
             render_batch_output()

@@ -22,6 +22,7 @@ from utils import (
     temp_workspace,
     slugify,
     validate_images_json,
+    get_persistent_cache_dir,
 )
 
 # ─── Logger Setup ───
@@ -62,10 +63,9 @@ def generate_for_single(
     image_urls: List[str],
 ) -> GenerationResult:
     base = f"{listing_id}_{product_id}" if listing_id and product_id and listing_id != product_id else slugify(title)
-    log.info(f"Starting generation for: {base}")
+    log.info(f"🎬 Generating content for: {base}")
 
     with temp_workspace() as workdir:
-        # Download images
         local_images = download_images(image_urls, workdir)
         if not local_images:
             raise GenerationError("❌ No images downloaded – check your URLs.")
@@ -80,7 +80,7 @@ def generate_for_single(
             except Exception as e:
                 log.warning(f"⚠️ Failed to process logo: {e}")
 
-        # Generate transcript
+        # Transcript
         transcript = _generate_transcript(title, description)
         if not transcript:
             raise GenerationError("❌ Transcript generation failed.")
@@ -97,7 +97,7 @@ def generate_for_single(
             basename=base,
         )
 
-        # Save blog + title files
+        # Write blog + title
         blog_file = os.path.join(workdir, f"{base}_blog.txt")
         title_file = os.path.join(workdir, f"{base}_title.txt")
         with open(blog_file, "w", encoding="utf-8") as bf:
@@ -105,7 +105,7 @@ def generate_for_single(
         with open(title_file, "w", encoding="utf-8") as tf:
             tf.write(title)
 
-        log.info(f"✅ Completed generation for: {base}")
+        log.info(f"✅ Completed: {base}")
         return GenerationResult(video_path, title_file, blog_file)
 
 
@@ -138,13 +138,11 @@ def generate_batch_from_csv(
         except Exception as e:
             raise GenerationError(f"❌ Invalid images JSON: {e}")
 
-    # Process each row
     for _, row in df.iterrows():
         lid, pid = str(row['Listing Id']), str(row['Product Id'])
         title, desc = str(row['Title']), str(row['Description'])
         key = (int(lid), int(pid)) if all(i.isdigit() for i in [lid, pid]) else (lid, pid)
 
-        # Fetch image URLs
         urls = image_map.get(key, [])
         if not urls and url_col:
             raw = str(row[url_col] or "")
@@ -176,15 +174,15 @@ def generate_batch_from_csv(
                     image_urls=urls,
                 )
             except GenerationError as ge:
-                log.error(f"❌ {lid}/{pid} generation failed: {ge}")
+                log.error(f"❌ {lid}/{pid} failed: {ge}")
                 continue
 
-            # Save files to output folder
+            # Save files
             dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")
             os.makedirs(dest, exist_ok=True)
             for f in [result.video_path, result.blog_file, result.title_file]:
                 shutil.copy(f, os.path.join(dest, os.path.basename(f)))
-            log.info(f"✅ Saved outputs for {lid}/{pid} to {dest}")
+            log.info(f"📁 Saved: {lid}/{pid} to {dest}")
 
 
 # ─── Transcript Generation ───
@@ -218,20 +216,20 @@ def _assemble_video(
     workdir: str,
     basename: str,
 ) -> str:
-    # Generate narration
     try:
         tts = gTTS(text=narration_text, lang="en")
         audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
         tts.save(audio_path)
     except Exception as e:
         raise GenerationError(f"❌ Voiceover generation failed: {e}")
-    audio_clip = AudioFileClip(audio_path)
 
-    # Image sequence
+    audio_clip = AudioFileClip(audio_path)
     clip = ImageSequenceClip(images, fps=1).set_audio(audio_clip)
 
-    # Title overlay
     font_path = os.path.join(fonts_folder, "Poppins-Bold.ttf")
+    if not os.path.exists(font_path):
+        raise GenerationError(f"Font not found: {font_path}")
+
     txt_clip = (
         TextClip(title_text, fontsize=30, font=font_path,
                  color="white", method="caption",
@@ -245,11 +243,11 @@ def _assemble_video(
         layers.append(logo_clip.set_duration(clip.duration))
 
     final = CompositeVideoClip(layers)
-
-    # Output video
     out_path = os.path.join(workdir, f"{basename}.mp4")
+
     try:
         final.write_videofile(out_path, codec="libx264", audio_codec="aac")
     except Exception as e:
         raise GenerationError(f"❌ Video rendering failed: {e}")
+
     return out_path
