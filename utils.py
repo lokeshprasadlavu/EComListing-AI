@@ -109,6 +109,25 @@ def preload_fonts_from_drive(fonts_folder_id: str) -> str:
     log.warning("⚠️ No font zip found in Drive folder.")
     return None
 
+
+def preload_logo_from_drive(logo_folder_id: str) -> str:
+    """Download the first image file in the logo folder."""
+    logo_cache_dir = get_persistent_cache_dir("logo")
+    imgs = list_files(mime_filter='image/', parent_id=logo_folder_id)
+
+    if not imgs:
+        log.warning("No image found in logo folder.")
+        return None
+
+    meta = imgs[0]
+    buf = download_file(meta['id'])
+    logo_path = os.path.join(logo_cache_dir, meta['name'])
+
+    with open(logo_path, 'wb') as f:
+        f.write(buf.read())
+
+    return logo_path
+
 # ─── Other Utilities ───
 def slugify(text: str) -> str:
     """Sanitize and slugify a string for filenames or keys."""
