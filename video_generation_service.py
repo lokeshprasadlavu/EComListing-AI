@@ -17,7 +17,8 @@ from moviepy.editor import (
 from gtts import gTTS
 
 from utils import (
-    download_images,
+    download_images
+    ,
     slugify,
     validate_images_json,
     get_persistent_cache_dir,
@@ -107,7 +108,19 @@ def generate_for_single(
         tf.write(title)
 
     log.info(f"✅ Completed: {base}")
-    return GenerationResult(video_path, title_file, blog_file)
+    # Save files to persistent output folder before returning
+    persist_output = os.path.join(cfg.output_base_folder, base)
+    os.makedirs(persist_output, exist_ok=True)
+
+    final_video = os.path.join(persist_output, os.path.basename(video_path))
+    final_blog = os.path.join(persist_output, os.path.basename(blog_file))
+    final_title = os.path.join(persist_output, os.path.basename(title_file))
+
+    shutil.copy(video_path, final_video)
+    shutil.copy(blog_file, final_blog)
+    shutil.copy(title_file, final_title)
+
+    return GenerationResult(final_video, final_title, final_blog)
 
 # ─── Batch CSV Generation ───
 def generate_batch_from_csv(
