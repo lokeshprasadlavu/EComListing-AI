@@ -239,7 +239,7 @@ def _assemble_video(
 
     txt_clip = (
         TextClip(title_text, fontsize=30, font=font_path,
-                 color="white", method="caption",
+                 color="white",
                  size=(int(clip.w * 0.8), None))
         .set_position((50, 50))
         .set_duration(clip.duration)

@@ -186,7 +186,8 @@ if mode == "Single Product":
                     st.error(str(ge))
                     st.stop()
                 except Exception as e:
-                    st.error(f"⚠️ Unexpected error. Please check your inputs and try again: {e}")
+                    st.error(
+                        f"⚠️ Unexpected error. Please check your inputs and try again: {e}")
                     st.stop()
 
                 st.session_state.last_single_result = result
