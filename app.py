@@ -90,32 +90,74 @@ if st.session_state.last_mode != mode:
     st.session_state.last_mode = mode
 
 # ─── Utilities ───
+import os
+import streamlit as st
+
 def render_single_output():
     result = st.session_state.last_single_result
     if result:
-        st.subheader(result.title)
-        if st.session_state.output_options in ("Video only", "Video + Blog"):
+        # Read and show the title
+        title_text = ""
+        if os.path.exists(result.title_file):
+            try:
+                with open(result.title_file, "r", encoding="utf-8") as tf:
+                    title_text = tf.read().strip()
+                st.subheader(title_text)
+            except Exception as e:
+                st.warning(f"⚠️ Failed to read title: {e}")
+
+        # Show video
+        if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(result.video_path):
             st.video(result.video_path)
-        if st.session_state.output_options in ("Blog only", "Video + Blog"):
+
+        # Show blog content
+        if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(result.blog_file):
             st.markdown("**Blog Content**")
-            st.write(open(result.blog_file, 'r', encoding='utf-8').read())
+            try:
+                with open(result.blog_file, "r", encoding="utf-8") as bf:
+                    st.write(bf.read())
+            except Exception as e:
+                st.warning(f"⚠️ Failed to read blog: {e}")
 
 def render_batch_output():
     folder = st.session_state.last_batch_folder
     if not folder:
         return
+
     for sub in os.listdir(folder):
         subdir = os.path.join(folder, sub)
         if not os.path.isdir(subdir):
             continue
-        st.subheader(f"Results for {sub}")
-        vid = os.path.join(subdir, f"{sub}.mp4")
-        blog = os.path.join(subdir, f"{sub}_blog.txt")
-        if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
-            st.video(vid)
-        if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+
+        title_file = os.path.join(subdir, f"{sub}_title.txt")
+        video_path = os.path.join(subdir, f"{sub}.mp4")
+        blog_file = os.path.join(subdir, f"{sub}_blog.txt")
+
+        # Display title
+        title_text = ""
+        if os.path.exists(title_file):
+            try:
+                with open(title_file, "r", encoding="utf-8") as tf:
+                    title_text = tf.read().strip()
+                st.subheader(f"{title_text} ({sub})")
+            except Exception as e:
+                st.warning(f"⚠️ Failed to read title for {sub}: {e}")
+        else:
+            st.subheader(f"Results for {sub}")
+
+        # Video
+        if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(video_path):
+            st.video(video_path)
+
+        # Blog
+        if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog_file):
             st.markdown("**Blog Content**")
-            st.write(open(blog, 'r', encoding='utf-8').read())
+            try:
+                with open(blog_file, "r", encoding="utf-8") as bf:
+                    st.write(bf.read())
+            except Exception as e:
+                st.warning(f"⚠️ Failed to read blog for {sub}: {e}")
+
 
 # ─── Single Product Mode ───
 if mode == "Single Product":
