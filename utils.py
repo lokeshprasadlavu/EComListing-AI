@@ -19,7 +19,14 @@ from drive_db import list_files, download_file, find_or_create_folder, upload_fi
 # ─── Logger ───
 log = logging.getLogger(__name__)
 
-
+@contextmanager
+def temp_workspace():
+    td = tempfile.mkdtemp()
+    try:
+        yield td
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+        
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
     return path

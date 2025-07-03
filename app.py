@@ -11,10 +11,7 @@ import pandas as pd
 from config import load_config
 from auth import get_openai_client, init_drive_service
 import drive_db
-from utils import (
-    temp_workspace, slugify, validate_images_json,
-    preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
-)
+from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, temp_workspace
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
 # ─── Persistent Cache Helper ───
@@ -277,7 +274,7 @@ else:
                 if not os.path.isdir(subdir):
                     continue
             render_batch_output()
-            
+
             # Upload each product folder in the batch to Drive
             for subdir in os.listdir(svc_cfg.output_base_folder):
                 full_path = os.path.join(svc_cfg.output_base_folder, subdir)
