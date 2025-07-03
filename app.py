@@ -13,15 +13,15 @@ from auth import get_openai_client, init_drive_service
 import drive_db
 from utils import (
     temp_workspace, slugify, validate_images_json,
-    preload_fonts_from_drive, preload_logo_from_drive
+    preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
 )
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
 # ─── Persistent Cache Helper ───
-def get_persistent_cache_dir(subdir: str):
-    cache_dir = os.path.join(tempfile.gettempdir(), 'ecomlisting_cache', subdir)
-    os.makedirs(cache_dir, exist_ok=True)
-    return cache_dir
+def get_session_path(key, default=None):
+    if key not in st.session_state:
+        st.session_state[key] = default
+    return st.session_state[key]
 
 # ─── Config and Services ───
 cfg = load_config()
@@ -78,86 +78,49 @@ st.markdown("🚀 AI-Powered Multimedia Content for your eCommerce Listings.")
 
 # ─── Mode ───
 mode = st.sidebar.radio("Choose Mode", ["Single Product", "Batch of Products"], key="app_mode")
+
 if st.session_state.last_mode != mode:
-    st.session_state.update({
+    for k in st.session_state.update({
         "title": "", "description": "", "uploaded_image_paths": [],
         "batch_csv_path": None, "batch_json_path": None,
         "batch_images_data": [], "last_single_result": None,
         "last_batch_folder": None,
         "show_output_radio_single": False,
         "show_output_radio_batch": False,
-    })
+    }):
+        st.session_state[k] = None if isinstance(st.session_state[k], (str, list, type(None))) else False
     st.session_state.last_mode = mode
 
 # ─── Utilities ───
-import os
-import streamlit as st
-
 def render_single_output():
     result = st.session_state.last_single_result
     if result:
-        # Read and show the title
-        title_text = ""
-        if os.path.exists(result.title_file):
-            try:
-                with open(result.title_file, "r", encoding="utf-8") as tf:
-                    title_text = tf.read().strip()
-                st.subheader(title_text)
-            except Exception as e:
-                st.warning(f"⚠️ Failed to read title: {e}")
-
-        # Show video
-        if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(result.video_path):
+        st.subheader("Generated Output")
+        if st.session_state.output_options in ("Video only", "Video + Blog"):
             st.video(result.video_path)
-
-        # Show blog content
-        if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(result.blog_file):
+        if st.session_state.output_options in ("Blog only", "Video + Blog"):
             st.markdown("**Blog Content**")
-            try:
-                with open(result.blog_file, "r", encoding="utf-8") as bf:
-                    st.write(bf.read())
-            except Exception as e:
-                st.warning(f"⚠️ Failed to read blog: {e}")
+            st.write(open(result.blog_file, 'r').read())
 
 def render_batch_output():
     folder = st.session_state.last_batch_folder
     if not folder:
         return
-
     for sub in os.listdir(folder):
         subdir = os.path.join(folder, sub)
-        if not os.path.isdir(subdir):
-            continue
-
-        title_file = os.path.join(subdir, f"{sub}_title.txt")
-        video_path = os.path.join(subdir, f"{sub}.mp4")
-        blog_file = os.path.join(subdir, f"{sub}_blog.txt")
-
-        # Display title
-        title_text = ""
-        if os.path.exists(title_file):
-            try:
-                with open(title_file, "r", encoding="utf-8") as tf:
-                    title_text = tf.read().strip()
-                st.subheader(f"{title_text} ({sub})")
-            except Exception as e:
-                st.warning(f"⚠️ Failed to read title for {sub}: {e}")
-        else:
+        if os.path.isdir(subdir):
             st.subheader(f"Results for {sub}")
+            vid = os.path.join(subdir, f"{sub}.mp4")
+            blog = os.path.join(subdir, f"{sub}_blog.txt")
+            if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
+                st.video(vid)
+            if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
+                st.markdown("**Blog Content**")
+                st.write(open(blog, 'r').read())
 
-        # Video
-        if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(video_path):
-            st.video(video_path)
-
-        # Blog
-        if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog_file):
-            st.markdown("**Blog Content**")
-            try:
-                with open(blog_file, "r", encoding="utf-8") as bf:
-                    st.write(bf.read())
-            except Exception as e:
-                st.warning(f"⚠️ Failed to read blog for {sub}: {e}")
-
+# --- Reusable Output Selector ---
+def select_output_options(default="Video + Blog"):
+    return st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=["Video only", "Blog only", "Video + Blog"].index(default))
 
 # ─── Single Product Mode ───
 if mode == "Single Product":
@@ -190,11 +153,7 @@ if mode == "Single Product":
             })
 
     if st.session_state.show_output_radio_single:
-        st.session_state.output_options = st.radio(
-            "Choose outputs to render:",
-            ("Video only", "Blog only", "Video + Blog"),
-            index=("Video only", "Blog only", "Video + Blog").index(st.session_state.output_options)
-        )
+        st.session_state.output_options = select_output_options(st.session_state.output_options)
 
         if st.button("Continue", key="continue_single"):
             slug = slugify(st.session_state.title)
@@ -224,29 +183,16 @@ if mode == "Single Product":
                         description=st.session_state.description,
                         image_urls=image_urls,
                     )
+                    st.session_state.last_single_result = result
+                    render_single_output()
+                    upload_output_files_to_drive(result, outputs_id, product_slug=slug)
                 except GenerationError as ge:
                     st.error(str(ge))
                     st.stop()
                 except Exception as e:
                     st.error(
-                        f"⚠️ Unexpected error. Please check your inputs and try again: {e}")
+                        f"⚠️ Unexpected error: {e}")
                     st.stop()
-
-                st.session_state.last_single_result = result
-                render_single_output()
-
-                prod_f = drive_db.find_or_create_folder(slug, parent_id=outputs_id)
-                try:
-                    for path in [result.video_path, result.title_file, result.blog_file]:
-                        mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                        drive_db.upload_file(
-                            name=os.path.basename(path),
-                            data=open(path, 'rb').read(),
-                            mime_type=mime,
-                            parent_id=prod_f
-                        )
-                except Exception as e:
-                    st.warning(f"⚠️ Upload to Drive failed: {e}")
 
 # ─── Batch Mode ───
 else:
@@ -272,6 +218,7 @@ else:
             st.error("❗Please upload a valid Products CSV.")
             st.stop()
 
+        st.session_state.last_batch_folder = None
         df = pd.read_csv(st.session_state.batch_csv_file_path)
         df.columns = [c.strip() for c in df.columns]
 
@@ -284,11 +231,10 @@ else:
         img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
         images_data = []
 
-        if img_col is None:
-            if not st.session_state.batch_json_file_path:
-                st.error("❗Provide either image URLs in CSV or upload a valid JSON file.")
-                st.stop()
-
+        if "imageURL" not in df.columns and not st.session_state.batch_json_file_path:
+            st.error("📂 Provide image URLs in CSV or upload JSON.")
+            st.stop()
+        elif st.session_state.batch_json_file_path:
             images_data = json.load(open(st.session_state.batch_json_file_path))
             try:
                 with st.spinner("Validating Images JSON..."):
@@ -297,18 +243,16 @@ else:
                 st.error(str(e))
                 st.stop()
 
-        st.session_state.batch_images_data = images_data
-        st.session_state.batch_csv_path = st.session_state.batch_csv_file_path
-        st.session_state.batch_json_path = st.session_state.batch_json_file_path
-        st.session_state.show_output_radio_batch = True
-        st.session_state.last_batch_folder = None
+        st.session_state.update({
+            "batch_images_data": images_data,
+            "batch_csv_path": st.session_state.batch_csv_file_path,
+            "batch_json_path": st.session_state.batch_json_file_path,
+            "show_output_radio_batch": True,
+            "last_batch_folder": None,
+        })
 
     if st.session_state.show_output_radio_batch:
-        st.session_state.output_options = st.radio(
-            "Choose outputs to render:",
-            ("Video only", "Blog only", "Video + Blog"),
-            index=("Video only", "Blog only", "Video + Blog").index(st.session_state.output_options)
-        )
+        st.session_state.output_options = select_output_options(st.session_state.output_options)
 
         if st.button("Continue", key="continue_batch"):
             svc_cfg = ServiceConfig(
@@ -332,19 +276,18 @@ else:
                 subdir = os.path.join(svc_cfg.output_base_folder, sub)
                 if not os.path.isdir(subdir):
                     continue
-
-                prod_f = drive_db.find_or_create_folder(sub, parent_id=outputs_id)
-                for path in glob.glob(os.path.join(subdir, '*')):
-                    if path.lower().endswith(('.mp4', '.txt')):
-                        try:
-                            mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
-                            drive_db.upload_file(
-                                name=os.path.basename(path),
-                                data=open(path, 'rb').read(),
-                                mime_type=mime,
-                                parent_id=prod_f
-                            )
-                        except Exception as e:
-                            st.warning(f"⚠️ Failed to upload {os.path.basename(path)}: {e}")
-
             render_batch_output()
+            
+            # Upload each product folder in the batch to Drive
+            for subdir in os.listdir(svc_cfg.output_base_folder):
+                full_path = os.path.join(svc_cfg.output_base_folder, subdir)
+                if os.path.isdir(full_path):
+                    try:
+                        upload_output_files_to_drive(
+                            result=None,
+                            parent_drive_id=outputs_id,
+                            product_slug=subdir,
+                            folder_path=full_path
+                        )
+                    except Exception as e:
+                        st.warning(f"⚠️ Failed to upload batch outputs for {subdir}: {e}")

@@ -18,7 +18,6 @@ from gtts import gTTS
 
 from utils import (
     download_images,
-    temp_workspace,
     slugify,
     validate_images_json,
     get_persistent_cache_dir,
@@ -27,7 +26,6 @@ from utils import (
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-
 
 # ─── Data Classes ───
 @dataclass
@@ -39,18 +37,14 @@ class ServiceConfig:
     logo_path: str
     output_base_folder: str
 
-
 @dataclass
 class GenerationResult:
     video_path: str
     title_file: str
     blog_file: str
 
-
 class GenerationError(Exception):
-    """Raised when video/blog generation fails for a user-facing reason."""
     pass
-
 
 # ─── Single Product Generation ───
 def generate_for_single(
@@ -64,56 +58,56 @@ def generate_for_single(
     base = f"{listing_id}_{product_id}" if listing_id and product_id and listing_id != product_id else slugify(title)
     log.info(f"🎬 Generating content for: {base}")
 
-    with temp_workspace() as workdir:
-        local_images = download_images(image_urls, workdir)
-        if not local_images:
-            raise GenerationError("❌ No images downloaded – check your URLs.")
+    persistent_dir = get_persistent_cache_dir(base)
+    audio_folder = os.path.join(persistent_dir, "audio")
+    os.makedirs(audio_folder, exist_ok=True)
+    workdir = os.path.join(persistent_dir, "workdir")
+    os.makedirs(workdir, exist_ok=True)
 
-        # Load and resize logo using Pillow
-        logo_clip = None
-        if cfg.logo_path and os.path.isfile(cfg.logo_path):
-            try:
-                # Open and resize using Pillow
-                logo_image = Image.open(cfg.logo_path).convert("RGBA")
-                resized_logo = logo_image.resize((150, 80), resample=Image.LANCZOS)
+    # Download images
+    local_images = download_images(image_urls, workdir)
+    if not local_images:
+        raise GenerationError("❌ No images downloaded – check your URLs.")
 
-                # Save resized logo to persistent cache
-                logo_cache_dir = get_persistent_cache_dir("logo")
-                resized_path = os.path.join(logo_cache_dir, "resized_logo.png")
-                resized_logo.save(resized_path)
+    # Logo
+    logo_clip = None
+    if cfg.logo_path and os.path.isfile(cfg.logo_path):
+        try:
+            logo_image = Image.open(cfg.logo_path).convert("RGBA")
+            resized_logo = logo_image.resize((150, 80), resample=Image.LANCZOS)
+            resized_path = os.path.join(persistent_dir, "resized_logo.png")
+            resized_logo.save(resized_path)
+            logo_clip = ImageClip(resized_path).set_duration(1).set_pos((10, 10))
+        except Exception as e:
+            log.warning(f"⚠️ Failed to process logo: {e}")
 
-                logo_clip = ImageClip(resized_path).set_duration(1).set_pos((10, 10))
-            except Exception as e:
-                log.warning(f"⚠️ Failed to process logo: {e}")
+    # Transcript
+    transcript = _generate_transcript(title, description)
+    if not transcript:
+        raise GenerationError("❌ Transcript generation failed.")
 
-        # Transcript
-        transcript = _generate_transcript(title, description)
-        if not transcript:
-            raise GenerationError("❌ Transcript generation failed.")
+    # Assemble video
+    video_path = _assemble_video(
+        images=local_images,
+        narration_text=transcript,
+        logo_clip=logo_clip,
+        title_text=title,
+        fonts_folder=cfg.fonts_zip_path,
+        audio_folder=audio_folder,
+        workdir=workdir,
+        basename=base,
+    )
 
-        # Assemble video
-        video_path = _assemble_video(
-            images=local_images,
-            narration_text=transcript,
-            logo_clip=logo_clip,
-            title_text=title,
-            fonts_folder=cfg.fonts_zip_path,
-            audio_folder=cfg.audio_folder,
-            workdir=workdir,
-            basename=base,
-        )
+    # Write blog + title files
+    blog_file = os.path.join(workdir, f"{base}_blog.txt")
+    title_file = os.path.join(workdir, f"{base}_title.txt")
+    with open(blog_file, "w", encoding="utf-8") as bf:
+        bf.write(transcript)
+    with open(title_file, "w", encoding="utf-8") as tf:
+        tf.write(title)
 
-        # Write blog + title
-        blog_file = os.path.join(workdir, f"{base}_blog.txt")
-        title_file = os.path.join(workdir, f"{base}_title.txt")
-        with open(blog_file, "w", encoding="utf-8") as bf:
-            bf.write(transcript)
-        with open(title_file, "w", encoding="utf-8") as tf:
-            tf.write(title)
-
-        log.info(f"✅ Completed: {base}")
-        return GenerationResult(video_path, title_file, blog_file)
-
+    log.info(f"✅ Completed: {base}")
+    return GenerationResult(video_path, title_file, blog_file)
 
 # ─── Batch CSV Generation ───
 def generate_batch_from_csv(
@@ -161,35 +155,21 @@ def generate_batch_from_csv(
             log.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
             continue
 
-        with temp_workspace() as tmp:
-            svc_cfg = ServiceConfig(
-                csv_file=cfg.csv_file,
-                images_json=cfg.images_json,
-                audio_folder=tmp,
-                fonts_zip_path=cfg.fonts_zip_path,
-                logo_path=cfg.logo_path,
-                output_base_folder=cfg.output_base_folder,
-            )
-            try:
-                result = generate_for_single(
-                    cfg=svc_cfg,
-                    listing_id=lid,
-                    product_id=pid,
-                    title=title,
-                    description=desc,
-                    image_urls=urls,
-                )
-            except GenerationError as ge:
-                log.error(f"❌ {lid}/{pid} failed: {ge}")
-                continue
+        result = generate_for_single(
+            cfg=cfg,
+            listing_id=lid,
+            product_id=pid,
+            title=title,
+            description=desc,
+            image_urls=urls,
+        )
 
-            # Save files
-            dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")
-            os.makedirs(dest, exist_ok=True)
-            for f in [result.video_path, result.blog_file, result.title_file]:
-                shutil.copy(f, os.path.join(dest, os.path.basename(f)))
-            log.info(f"📁 Saved: {lid}/{pid} to {dest}")
-
+        # Save result files
+        dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")
+        os.makedirs(dest, exist_ok=True)
+        for f in [result.video_path, result.blog_file, result.title_file]:
+            shutil.copy(f, os.path.join(dest, os.path.basename(f)))
+        log.info(f"📁 Saved: {lid}/{pid} to {dest}")
 
 # ─── Transcript Generation ───
 def _generate_transcript(title: str, description: str) -> str:
@@ -210,7 +190,6 @@ def _generate_transcript(title: str, description: str) -> str:
     except Exception:
         raise GenerationError("⚠️ Unexpected error generating transcript.")
 
-
 # ─── Video Assembly ───
 def _assemble_video(
     images: List[str],
@@ -222,7 +201,7 @@ def _assemble_video(
     workdir: str,
     basename: str,
 ) -> str:
-    # Step 1: Generate narration
+    # Generate audio
     try:
         tts = gTTS(text=narration_text, lang="en")
         audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
@@ -230,53 +209,36 @@ def _assemble_video(
     except Exception as e:
         raise GenerationError(f"❌ Voiceover generation failed: {e}")
 
-    # Step 2: Create audio clip
     audio_clip = AudioFileClip(audio_path)
-
-    # Step 3: Create image clip
     clip = ImageSequenceClip(images, fps=1).set_audio(audio_clip)
 
-    # Step 4: Create PIL text overlay as ImageClip
+    # Create title overlay
     font_path = os.path.join(fonts_folder, "Poppins-Bold.ttf")
     if not os.path.exists(font_path):
         raise GenerationError(f"Font not found: {font_path}")
 
     try:
-        # Create transparent image for text
         txt_img = Image.new("RGBA", (clip.w, 100), (0, 0, 0, 0))
         draw = ImageDraw.Draw(txt_img)
         font = ImageFont.truetype(font_path, 30)
-
-        # Centered title
-        bbox = draw.textbbox((0, 0), title_text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        position = ((clip.w - text_width) // 2, (100 - text_height) // 2)
-        draw.text(position, title_text, font=font, fill=(255, 255, 255, 255))
-
-        # Save text image
+        text_width, _ = draw.textsize(title_text, font=font)
+        draw.text(((clip.w - text_width) // 2, 10), title_text, font=font, fill=(255, 255, 255, 255))
         txt_path = os.path.join(workdir, f"{basename}_text.png")
         txt_img.save(txt_path)
-
-        # Convert to ImageClip
         txt_clip = ImageClip(txt_path).set_duration(clip.duration)
     except Exception as e:
         raise GenerationError(f"❌ Title overlay creation failed: {e}")
 
-    # Step 5: Combine layers
     layers = [clip, txt_clip]
     if logo_clip:
         layers.append(logo_clip.set_duration(clip.duration))
 
     final = CompositeVideoClip(layers)
-
-    # Step 6: Export video
     out_path = os.path.join(workdir, f"{basename}.mp4")
+
     try:
         final.write_videofile(out_path, codec="libx264", audio_codec="aac")
     except Exception as e:
         raise GenerationError(f"❌ Video rendering failed: {e}")
 
     return out_path
-
-

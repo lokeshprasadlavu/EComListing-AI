@@ -1,5 +1,6 @@
 import logging
 import os
+import glob
 import re
 import shutil
 import tempfile
@@ -12,63 +13,23 @@ from fastjsonschema import JsonSchemaException
 import fastjsonschema
 from PIL import Image
 from moviepy.editor import ImageClip
-
-from drive_db import list_files, download_file
+import drive_db
+from drive_db import list_files, download_file, find_or_create_folder, upload_file
 
 # ─── Logger ───
 log = logging.getLogger(__name__)
 
-# ─── File System Utilities ─── 
+
 def ensure_dir(path: str):
-    """Ensure a directory exists."""
     os.makedirs(path, exist_ok=True)
     return path
 
-@contextmanager
-def temp_workspace():
-    """Temporary working directory context."""
-    td = tempfile.mkdtemp()
-    try:
-        yield td
-    finally:
-        shutil.rmtree(td, ignore_errors=True)
-
 def get_persistent_cache_dir(subdir: str):
-    """Returns a persistent cache path under /tmp/ecomlisting_cache/"""
-    cache_dir = os.path.join(tempfile.gettempdir(), 'ecomlisting_cache', subdir)
-    os.makedirs(cache_dir, exist_ok=True)
-    return cache_dir
+    from tempfile import gettempdir
+    base_dir = os.path.join(gettempdir(), "ecomlisting_cache", subdir)
+    return ensure_dir(base_dir)
 
-# ─── Downloads ─── 
-def download_images(image_urls: List[str], target_dir: str) -> List[str]:
-    """Download or copy images to a local directory and return paths."""
-    ensure_dir(target_dir)
-    local_paths = []
-    for url in image_urls:
-        try:
-            filename = os.path.basename(url)
-            dest = os.path.join(target_dir, filename)
-
-            if os.path.isfile(url):  # Local file path
-                shutil.copy(url, dest)
-            else:  # Remote URL
-                resp = requests.get(url, timeout=30)
-                resp.raise_for_status()
-                with open(dest, "wb") as f:
-                    f.write(resp.content)
-
-            local_paths.append(dest)
-        except Exception as e:
-            log.warning(f"⚠️ Failed to download image: {url} — {e}")
-
-    if not local_paths:
-        raise RuntimeError("❌ All image downloads failed – check your URLs or network.")
-    
-    return local_paths
-
-# ─── Fonts & Logo Preload ───
 def extract_fonts(zip_path: str, extract_to: str):
-    """Extract a .zip of fonts into a folder."""
     try:
         ensure_dir(extract_to)
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -80,33 +41,22 @@ def extract_fonts(zip_path: str, extract_to: str):
         raise RuntimeError(f"❌ Could not extract fonts from {zip_path}: {e}")
 
 def preload_fonts_from_drive(fonts_folder_id: str) -> str:
-    """
-    Downloads and extracts the fonts ZIP from Drive into a persistent cache.
-    Avoids re-downloading if fonts are already extracted.
-    """
+    """Download and extract font ZIP from Drive."""
     font_cache_dir = get_persistent_cache_dir("fonts")
-    fonts_dir = os.path.join(font_cache_dir, 'extracted')
-
-    # Check if already extracted
-    if os.path.isdir(fonts_dir) and any(fname.endswith('.ttf') for fname in os.listdir(fonts_dir)):
-        return fonts_dir 
-
-    # Else, download zip and extract
     zips = list_files(parent_id=fonts_folder_id)
     zip_meta = next((f for f in zips if f['name'].lower().endswith('.zip')), None)
 
     if zip_meta:
-        try:
-            buf = download_file(zip_meta['id'])
-            zip_path = os.path.join(font_cache_dir, zip_meta['name'])
-            with open(zip_path, 'wb') as f:
-                f.write(buf.read())
+        buf = download_file(zip_meta['id'])
+        zip_path = os.path.join(font_cache_dir, zip_meta['name'])
 
-            return extract_fonts(zip_path, fonts_dir)
-        except Exception as e:
-            raise RuntimeError(f"❌ Failed to download/extract fonts: {e}")
+        with open(zip_path, 'wb') as f:
+            f.write(buf.read())
 
-    log.warning("⚠️ No font zip found in Drive folder.")
+        fonts_dir = os.path.join(font_cache_dir, 'extracted')
+        return extract_fonts(zip_path, fonts_dir)
+    
+    print("⚠️ No font zip found in Drive folder.")
     return None
 
 def preload_logo_from_drive(logo_folder_id: str) -> str:
@@ -115,7 +65,7 @@ def preload_logo_from_drive(logo_folder_id: str) -> str:
     imgs = list_files(mime_filter='image/', parent_id=logo_folder_id)
 
     if not imgs:
-        log.warning("No image found in logo folder.")
+        print("⚠️ No image found in logo folder.")
         return None
 
     meta = imgs[0]
@@ -177,3 +127,38 @@ def validate_images_json(data):
             pid = entry.get("productId")
             identifier = f"(listingId={lid}, productId={pid})" if lid and pid else f"# {idx}"
             raise ValueError(f"❌ Invalid Images JSON at {identifier}: {e.message}")
+        
+def upload_output_files_to_drive(result=None, parent_drive_id=None, product_slug=None, folder_path=None):
+    """Upload result (single) or batch folder to Google Drive."""
+    if not parent_drive_id or not product_slug:
+        raise ValueError("Missing drive folder or product slug.")
+
+    prod_f = drive_db.find_or_create_folder(product_slug, parent_id=parent_drive_id)
+
+    # If a single result is passed
+    if result and hasattr(result, 'video_path'):
+        files_to_upload = [
+            (result.video_path, "video/mp4"),
+            (result.blog_file, "text/plain"),
+            (result.title_file, "text/plain"),
+        ]
+    elif folder_path:
+        files_to_upload = [
+            (os.path.join(folder_path, f), 'video/mp4' if f.endswith('.mp4') else 'text/plain')
+            for f in os.listdir(folder_path)
+            if f.lower().endswith(('.mp4', '.txt'))
+        ]
+    else:
+        raise ValueError("Either result or folder_path must be provided.")
+
+    for path, mime in files_to_upload:
+        try:
+            drive_db.upload_file(
+                name=os.path.basename(path),
+                data=open(path, 'rb').read(),
+                mime_type=mime,
+                parent_id=prod_f,
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to upload {os.path.basename(path)}: {e}")
+
