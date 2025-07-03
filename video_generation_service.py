@@ -214,7 +214,7 @@ def _assemble_video(
     workdir: str,
     basename: str,
 ) -> str:
-    # Step 1: Generate narration
+    # Generate narration
     try:
         tts = gTTS(text=narration_text, lang="en")
         audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
@@ -222,13 +222,20 @@ def _assemble_video(
     except Exception as e:
         raise GenerationError(f"❌ Voiceover generation failed: {e}")
 
-    # Step 2: Create audio clip
+    # Create audio clip
     audio_clip = AudioFileClip(audio_path)
 
-    # Step 3: Create image clip
+    if not images:
+        raise GenerationError("❌ No valid images provided for video generation.")
+
+    for img_path in images:
+        if not os.path.exists(img_path):
+            raise GenerationError(f"❌ Missing image file: {img_path}")
+
+    # Create image clip
     clip = ImageSequenceClip(images, fps=1).set_audio(audio_clip)
 
-    # Step 4: Create PIL text overlay as ImageClip
+    # Create PIL text overlay as ImageClip
     font_path = os.path.join(fonts_folder, "Poppins-Bold.ttf")
     if not os.path.exists(font_path):
         raise GenerationError(f"Font not found: {font_path}")
@@ -255,14 +262,14 @@ def _assemble_video(
     except Exception as e:
         raise GenerationError(f"❌ Title overlay creation failed: {e}")
 
-    # Step 5: Combine layers
+    # Combine layers
     layers = [clip, txt_clip]
     if logo_clip:
         layers.append(logo_clip.set_duration(clip.duration))
 
     final = CompositeVideoClip(layers)
 
-    # Step 6: Export video
+    # Export video
     out_path = os.path.join(workdir, f"{basename}.mp4")
     try:
         final.write_videofile(out_path, codec="libx264", audio_codec="aac")

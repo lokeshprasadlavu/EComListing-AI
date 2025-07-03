@@ -46,6 +46,23 @@ fonts_folder = preload_fonts_from_drive(fonts_id)
 logo_path = preload_logo_from_drive(logo_id)
 
 # ─── Session State ───
+def reset_session_state():
+    keys_to_reset = {
+        "title": "",
+        "description": "",
+        "uploaded_image_paths": [],
+        "batch_csv_path": None,
+        "batch_json_path": None,
+        "batch_images_data": [],
+        "last_single_result": None,
+        "last_batch_folder": None,
+        "show_output_radio_single": False,
+        "show_output_radio_batch": False,
+        "input_signature": None,
+    }
+    for k, v in keys_to_reset.items():
+        st.session_state[k] = v
+
 def init_session_state():
     defaults = {
         "output_options": "Video + Blog",
@@ -78,16 +95,10 @@ st.markdown("🚀 AI-Powered Multimedia Content for your eCommerce Listings.")
 mode = st.sidebar.radio("Choose Mode", ["Single Product", "Batch of Products"], key="app_mode")
 
 if st.session_state.last_mode != mode:
-    for k in st.session_state.update({
-        "title": "", "description": "", "uploaded_image_paths": [],
-        "batch_csv_path": None, "batch_json_path": None,
-        "batch_images_data": [], "last_single_result": None,
-        "last_batch_folder": None,
-        "show_output_radio_single": False,
-        "show_output_radio_batch": False,
-    }):
-        st.session_state[k] = None if isinstance(st.session_state[k], (str, list, type(None))) else False
+    reset_session_state()
     st.session_state.last_mode = mode
+    st.experimental_rerun()
+
 
 # ─── Utilities ───
 def render_single_output():
@@ -139,7 +150,17 @@ if mode == "Single Product":
             saved_paths.append(path)
 
     if st.button("Generate"):
-        input_signature = hashlib.md5((title + description + "".join(sorted([img.name for img in uploaded_images]))).encode()).hexdigest()
+        if not title.strip() or not description.strip():
+            st.error("❗ Please enter both title and description.")
+            st.stop()
+
+        if not uploaded_images:
+            st.error("❗ Please upload at least one product image.")
+            st.stop()
+        input_signature = hashlib.md5(
+            (title + description + "".join(sorted([img.name for img in uploaded_images]))).encode()
+        ).hexdigest()
+
         if st.session_state.input_signature != input_signature:
             st.session_state.update({
                 "title": title,
@@ -149,6 +170,10 @@ if mode == "Single Product":
                 "last_single_result": None,
                 "input_signature": input_signature
             })
+        else:
+            st.warning("⚠️ No changes detected. Modify inputs before regenerating.")
+            st.stop()
+
 
     if st.session_state.show_output_radio_single:
         st.session_state.output_options = select_output_options(st.session_state.output_options)
@@ -173,6 +198,14 @@ if mode == "Single Product":
                 logo_path=logo_path,
                 output_base_folder=output_dir,
             )
+            if not st.session_state.uploaded_image_paths:
+                st.error("❗ No uploaded images found. Please re-upload them.")
+                st.stop()
+
+            missing_paths = [p for p in st.session_state.uploaded_image_paths if not os.path.exists(p)]
+            if missing_paths:
+                st.error("❗ Some uploaded images are missing from memory. Please upload again.")
+                st.stop()
 
             try:
                 result = generate_for_single(
