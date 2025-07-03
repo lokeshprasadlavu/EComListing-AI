@@ -162,12 +162,16 @@ def upload_output_files_to_drive(subdir: str, parent_id: str):
     """
     Upload all .mp4 and .txt files from the given subdir to Drive under the specified parent folder.
     """
+    log.info(f"📂 Looking for files in: {subdir}")
+    paths = glob.glob(os.path.join(subdir, '*'))
+    log.info(f"🔍 Found files: {paths}")
 
     sub = os.path.basename(subdir)
     prod_f = drive_db.find_or_create_folder(sub, parent_id=parent_id)
 
-    for path in glob.glob(os.path.join(subdir, '*')):
+    for path in paths:
         if path.lower().endswith(('.mp4', '.txt')):
+            log.info(f"📄 Attempting to upload: {path}")
             try:
                 mime = 'video/mp4' if path.endswith('.mp4') else 'text/plain'
                 with open(path, 'rb') as f:
@@ -178,5 +182,7 @@ def upload_output_files_to_drive(subdir: str, parent_id: str):
                     mime_type=mime,
                     parent_id=prod_f
                 )
+                log.info(f"✅ Uploaded: {path}")
             except Exception as e:
-                log.warning(f"⚠️ Failed to upload {os.path.basename(path)}: {e}")
+                log.error(f"❌ Upload failed for {path}: {e}")
+
