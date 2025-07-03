@@ -80,41 +80,34 @@ def extract_fonts(zip_path: str, extract_to: str):
         raise RuntimeError(f"❌ Could not extract fonts from {zip_path}: {e}")
 
 def preload_fonts_from_drive(fonts_folder_id: str) -> str:
-    """Download and extract font ZIP from Drive."""
+    """
+    Downloads and extracts the fonts ZIP from Drive into a persistent cache.
+    Avoids re-downloading if fonts are already extracted.
+    """
     font_cache_dir = get_persistent_cache_dir("fonts")
+    fonts_dir = os.path.join(font_cache_dir, 'extracted')
+
+    # ✅ Check if already extracted
+    if os.path.isdir(fonts_dir) and any(fname.endswith('.ttf') for fname in os.listdir(fonts_dir)):
+        return fonts_dir  # Already extracted
+
+    # 🔄 Else, download zip and extract
     zips = list_files(parent_id=fonts_folder_id)
     zip_meta = next((f for f in zips if f['name'].lower().endswith('.zip')), None)
 
     if zip_meta:
-        buf = download_file(zip_meta['id'])
-        zip_path = os.path.join(font_cache_dir, zip_meta['name'])
+        try:
+            buf = download_file(zip_meta['id'])
+            zip_path = os.path.join(font_cache_dir, zip_meta['name'])
+            with open(zip_path, 'wb') as f:
+                f.write(buf.read())
 
-        with open(zip_path, 'wb') as f:
-            f.write(buf.read())
+            return extract_fonts(zip_path, fonts_dir)
+        except Exception as e:
+            raise RuntimeError(f"❌ Failed to download/extract fonts: {e}")
 
-        fonts_dir = os.path.join(font_cache_dir, 'extracted')
-        return extract_fonts(zip_path, fonts_dir)
-    
-    log.warning("No font zip found in Drive folder.")
+    log.warning("⚠️ No font zip found in Drive folder.")
     return None
-
-def preload_logo_from_drive(logo_folder_id: str) -> str:
-    """Download the first image file in the logo folder."""
-    logo_cache_dir = get_persistent_cache_dir("logo")
-    imgs = list_files(mime_filter='image/', parent_id=logo_folder_id)
-
-    if not imgs:
-        log.warning("No image found in logo folder.")
-        return None
-
-    meta = imgs[0]
-    buf = download_file(meta['id'])
-    logo_path = os.path.join(logo_cache_dir, meta['name'])
-
-    with open(logo_path, 'wb') as f:
-        f.write(buf.read())
-
-    return logo_path
 
 # ─── Other Utilities ───
 def slugify(text: str) -> str:

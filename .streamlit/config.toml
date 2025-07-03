@@ -4,8 +4,6 @@ backgroundColor = "#F7F9FC"      # soft off-white
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#1D2545"           # dark navy text
 font = "sans serif"
-
-[theme.palette]
 accent = "#17A398"              # teal accent (buttons, links)
 error = "#E74C3C"
 warning = "#F39C12"
