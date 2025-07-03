@@ -158,7 +158,7 @@ def slugify(text: str) -> str:
     return s.strip('_').lower()
 
 
-def upload_output_folder(subdir: str, parent_id: str):
+def upload_output_files_to_drive(subdir: str, parent_id: str):
     """
     Upload all .mp4 and .txt files from the given subdir to Drive under the specified parent folder.
     """
