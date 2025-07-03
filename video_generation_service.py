@@ -248,8 +248,10 @@ def _assemble_video(
         font = ImageFont.truetype(font_path, 30)
 
         # Centered title
-        text_width, text_height = draw.textsize(title_text, font=font)
-        position = ((clip.w - text_width) // 2, 10)
+        bbox = draw.textbbox((0, 0), title_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        position = ((clip.w - text_width) // 2, (100 - text_height) // 2)
         draw.text(position, title_text, font=font, fill=(255, 255, 255, 255))
 
         # Save text image
@@ -276,4 +278,5 @@ def _assemble_video(
         raise GenerationError(f"❌ Video rendering failed: {e}")
 
     return out_path
+
 
