@@ -87,11 +87,11 @@ def preload_fonts_from_drive(fonts_folder_id: str) -> str:
     font_cache_dir = get_persistent_cache_dir("fonts")
     fonts_dir = os.path.join(font_cache_dir, 'extracted')
 
-    # ✅ Check if already extracted
+    # Check if already extracted
     if os.path.isdir(fonts_dir) and any(fname.endswith('.ttf') for fname in os.listdir(fonts_dir)):
-        return fonts_dir  # Already extracted
+        return fonts_dir 
 
-    # 🔄 Else, download zip and extract
+    # Else, download zip and extract
     zips = list_files(parent_id=fonts_folder_id)
     zip_meta = next((f for f in zips if f['name'].lower().endswith('.zip')), None)
 
