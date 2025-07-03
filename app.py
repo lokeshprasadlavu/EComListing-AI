@@ -188,11 +188,10 @@ if mode == "Single Product":
 
                 # ✅ Upload outputs to Drive
                 upload_output_files_to_drive(
-                    result=None,
-                    parent_drive_id=outputs_id,
-                    product_slug=slug,
-                    folder_path=output_dir
-                )
+                                    subdir=output_dir,
+                                    parent_id=outputs_id
+                                    )
+
 
             except GenerationError as ge:
                 st.error(str(ge))
@@ -289,11 +288,9 @@ else:
                 if os.path.isdir(full_path):
                     try:
                         upload_output_files_to_drive(
-                            result=None,
-                            parent_drive_id=outputs_id,
-                            product_slug=subdir,
-                            folder_path=full_path
-                        )
+                                subdir=full_path,
+                                parent_id=outputs_id
+                            )
                     except Exception as e:
                         st.warning(f"⚠️ Failed to upload batch outputs for {subdir}: {e}")
 
