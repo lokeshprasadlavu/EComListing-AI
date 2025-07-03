@@ -13,6 +13,12 @@ import drive_db
 from utils import temp_workspace, extract_fonts, slugify, validate_images_json
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
+# ─── Persistent Cache Path Helper ───
+def get_persistent_cache_dir(subdir: str):
+    cache_dir = os.path.join(tempfile.gettempdir(), 'ecomlisting_cache', subdir)
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
 # ─── Config and Services ───
 cfg = load_config()
 openai = get_openai_client(cfg.openai_api_key)
@@ -34,30 +40,41 @@ except Exception as e:
     st.error(f"⚠️ Database setup failed: {e}")
     st.stop()
 
-# ─── Preload Fonts and Logo ───
+# ─── Preload Fonts and Logo Using Persistent Cache ───
 @st.cache_data(show_spinner=False)
 def preload_fonts(fonts_folder_id):
-    with temp_workspace() as td:
-        zips = drive_db.list_files(parent_id=fonts_folder_id)
-        zip_meta = next((f for f in zips if f['name'].lower().endswith('.zip')), None)
-        if zip_meta:
-            buf = drive_db.download_file(zip_meta['id'])
-            zp  = os.path.join(td, zip_meta['name'])
-            with open(zp, 'wb') as f: f.write(buf.read())
-            return extract_fonts(zp, os.path.join(td, 'fonts'))
+    font_cache_dir = get_persistent_cache_dir("fonts")
+    zips = drive_db.list_files(parent_id=fonts_folder_id)
+    zip_meta = next((f for f in zips if f['name'].lower().endswith('.zip')), None)
+
+    if zip_meta:
+        buf = drive_db.download_file(zip_meta['id'])
+        zip_path = os.path.join(font_cache_dir, zip_meta['name'])
+
+        with open(zip_path, 'wb') as f:
+            f.write(buf.read())
+
+        fonts_dir = os.path.join(font_cache_dir, 'extracted')
+        return extract_fonts(zip_path, fonts_dir)
+    
     return None
 
 @st.cache_data(show_spinner=False)
 def preload_logo(logo_folder_id):
+    logo_cache_dir = get_persistent_cache_dir("logo")
     imgs = drive_db.list_files(mime_filter='image/', parent_id=logo_folder_id)
+
     if not imgs:
         return None
+    
     meta = imgs[0]
-    buf  = drive_db.download_file(meta['id'])
-    with temp_workspace() as td:
-        lp = os.path.join(td, meta['name'])
-        with open(lp, 'wb') as f: f.write(buf.read())
-        return lp
+    buf = drive_db.download_file(meta['id'])
+    logo_path = os.path.join(logo_cache_dir, meta['name'])
+
+    with open(logo_path, 'wb') as f:
+        f.write(buf.read())
+        
+    return logo_path
 
 fonts_folder = preload_fonts(fonts_id)
 logo_path    = preload_logo(logo_id)
