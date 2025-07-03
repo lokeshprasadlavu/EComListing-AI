@@ -1,5 +1,4 @@
-# io_utils.py
-
+import logging as log
 import os
 import re
 import shutil
@@ -10,29 +9,31 @@ from typing import List
 import requests
 import fastjsonschema
 from fastjsonschema import JsonSchemaException
+from PIL import Image
+from moviepy.editor import ImageClip
 
+from drive_db import list_files, download_file
+
+# ─── File System Utilities ─── 
 def ensure_dir(path: str):
-    """Create directory if it doesn’t exist."""
     os.makedirs(path, exist_ok=True)
     return path
 
 @contextmanager
 def temp_workspace():
-    """
-    Context manager that yields a fresh temporary directory
-    and cleans up on exit.
-    """
     td = tempfile.mkdtemp()
     try:
         yield td
     finally:
         shutil.rmtree(td, ignore_errors=True)
 
+def get_persistent_cache_dir(subdir: str):
+    cache_dir = os.path.join(tempfile.gettempdir(), 'ecomlisting_cache', subdir)
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+# ─── Downloads ─── 
 def download_images(image_urls: List[str], target_dir: str) -> List[str]:
-    """
-    Download each URL into target_dir and return list of local file paths.
-    Supports local file paths as well as HTTP URLs.
-    """
     ensure_dir(target_dir)
     local_paths = []
     for url in image_urls:
@@ -48,16 +49,13 @@ def download_images(image_urls: List[str], target_dir: str) -> List[str]:
                     f.write(resp.content)
             local_paths.append(dest)
         except Exception as e:
-            print(f"Warning: failed to download image {url}: {e}")
-        if not local_paths:
-            raise RuntimeError("All image downloads failed – please check your URLs or network.")
-        return local_paths
+            log.info(f"Warning: failed to download image {url}: {e}")
+    if not local_paths:
+        raise RuntimeError("All image downloads failed – please check your URLs or network.")
+    return local_paths
 
+# ─── Fonts & Logo Preload ───
 def extract_fonts(zip_path: str, extract_to: str):
-    """
-    Unzip a font ZIP (e.g. Poppins.zip) into a folder.
-    Overwrites any existing files.
-    """
     try:
         ensure_dir(extract_to)
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -68,13 +66,43 @@ def extract_fonts(zip_path: str, extract_to: str):
     except Exception as e:
         raise RuntimeError(f"Could not extract fonts from {zip_path}: {e}")
 
+def preload_fonts_from_drive(fonts_folder_id: str) -> str:
+    font_cache_dir = get_persistent_cache_dir("fonts")
+    zips = list_files(parent_id=fonts_folder_id)
+    zip_meta = next((f for f in zips if f['name'].lower().endswith('.zip')), None)
+
+    if zip_meta:
+        buf = download_file(zip_meta['id'])
+        zip_path = os.path.join(font_cache_dir, zip_meta['name'])
+        with open(zip_path, 'wb') as f:
+            f.write(buf.read())
+        fonts_dir = os.path.join(font_cache_dir, 'extracted')
+        return extract_fonts(zip_path, fonts_dir)
+
+    return None
+
+def preload_logo_from_drive(logo_folder_id: str) -> str:
+    logo_cache_dir = get_persistent_cache_dir("logo")
+    imgs = list_files(mime_filter='image/', parent_id=logo_folder_id)
+
+    if not imgs:
+        return None
+
+    meta = imgs[0]
+    buf = download_file(meta['id'])
+    logo_path = os.path.join(logo_cache_dir, meta['name'])
+
+    with open(logo_path, 'wb') as f:
+        f.write(buf.read())
+
+    return logo_path
+
+# ─── Other Utilities ───
 def slugify(text: str) -> str:
-    """
-    Convert arbitrary text into a filesystem‐ and URL‐friendly slug.
-    """
     s = re.sub(r'[^a-zA-Z0-9]+', '_', text)
     return s.strip('_').lower()
 
+# ─── JSON Schema Validation ───
 images_json_schema = {
     "type": "array",
     "items": {

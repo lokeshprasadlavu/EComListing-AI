@@ -11,21 +11,25 @@ from PIL import Image
 from moviepy.editor import (
     ImageSequenceClip,
     AudioFileClip,
-    concatenate_videoclips,
-    concatenate_audioclips,
     TextClip,
     ImageClip,
     CompositeVideoClip,
 )
 from gtts import gTTS
 
-from utils import download_images, temp_workspace, slugify, validate_images_json
+from utils import (
+    download_images,
+    temp_workspace,
+    slugify,
+    validate_images_json,
+)
 
-# Configure module-level logger
+# ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
+# ─── Data Classes ───
 @dataclass
 class ServiceConfig:
     csv_file: str
@@ -35,17 +39,20 @@ class ServiceConfig:
     logo_path: str
     output_base_folder: str
 
+
 @dataclass
 class GenerationResult:
     video_path: str
     title_file: str
     blog_file: str
 
+
 class GenerationError(Exception):
     """Raised when video/blog generation fails for a user-facing reason."""
     pass
 
 
+# ─── Single Product Generation ───
 def generate_for_single(
     cfg: ServiceConfig,
     listing_id: Optional[str],
@@ -54,39 +61,29 @@ def generate_for_single(
     description: str,
     image_urls: List[str],
 ) -> GenerationResult:
-    """
-    Generate video + blog + title for a single product.
-    If listing_id/product_id are missing, use slug of title.
-    """
-    # Determine output base name
-    if not listing_id or not product_id:
-        base = slugify(title)
-    else:
-        base = f"{listing_id}_{product_id}" if listing_id != product_id else listing_id
-    log.info(f"Starting generation for {base}")
+    base = f"{listing_id}_{product_id}" if listing_id and product_id and listing_id != product_id else slugify(title)
+    log.info(f"Starting generation for: {base}")
 
     with temp_workspace() as workdir:
-        # Download images locally
-        log.debug("Downloading images for single product")
+        # Download images
         local_images = download_images(image_urls, workdir)
+        if not local_images:
+            raise GenerationError("❌ No images downloaded – check your URLs.")
 
-        # map fonts directory
-        fonts_dir = cfg.fonts_zip_path
-
-        # Prepare logo clip
+        # Load logo
         logo_clip = None
-        try:
-            img_logo = Image.open(cfg.logo_path).convert("RGBA")
-            logo_clip = ImageClip(cfg.logo_path).set_duration(1)
-            logo_clip = logo_clip.resize(height=80).set_pos((10, 10))
-        except Exception:
-            log.warning("Unable to load logo at %s", cfg.logo_path)
+        if cfg.logo_path and os.path.isfile(cfg.logo_path):
+            try:
+                Image.open(cfg.logo_path).convert("RGBA")  # Validate
+                logo_clip = ImageClip(cfg.logo_path).set_duration(1)
+                logo_clip = logo_clip.resize(height=80).set_pos((10, 10))
+            except Exception as e:
+                log.warning(f"⚠️ Failed to process logo: {e}")
 
         # Generate transcript
         transcript = _generate_transcript(title, description)
         if not transcript:
-            log.error("Transcript generation failed, aborting.")
-            raise RuntimeError("Transcript generation failed")
+            raise GenerationError("❌ Transcript generation failed.")
 
         # Assemble video
         video_path = _assemble_video(
@@ -94,13 +91,13 @@ def generate_for_single(
             narration_text=transcript,
             logo_clip=logo_clip,
             title_text=title,
-            fonts_folder=fonts_dir,
+            fonts_folder=cfg.fonts_zip_path,
             audio_folder=cfg.audio_folder,
             workdir=workdir,
             basename=base,
         )
 
-        # Write blog & title files
+        # Save blog + title files
         blog_file = os.path.join(workdir, f"{base}_blog.txt")
         title_file = os.path.join(workdir, f"{base}_title.txt")
         with open(blog_file, "w", encoding="utf-8") as bf:
@@ -108,73 +105,58 @@ def generate_for_single(
         with open(title_file, "w", encoding="utf-8") as tf:
             tf.write(title)
 
-        log.info(f"Completed generation for {base}")
+        log.info(f"✅ Completed generation for: {base}")
         return GenerationResult(video_path, title_file, blog_file)
 
 
+# ─── Batch CSV Generation ───
 def generate_batch_from_csv(
     cfg: ServiceConfig,
     images_data: Optional[List[Dict]] = None,
 ) -> None:
-    """
-    Process a batch by reading cfg.csv_file and optional cfg.images_json.
-    Validates CSV columns and either CSV URL column or JSON images.
-    """
-    # Load CSV
     if not os.path.exists(cfg.csv_file):
-        raise GenerationError(f"CSV file not found: {cfg.csv_file}")
+        raise GenerationError(f"CSV not found: {cfg.csv_file}")
+
     df = pd.read_csv(cfg.csv_file)
     df.columns = [c.strip() for c in df.columns]
 
-    # Required columns
     required = ['Listing Id', 'Product Id', 'Title', 'Description']
     missing = [c for c in required if c not in df.columns]
-    # Detect URL column if any
-    url_col = next((c for c in df.columns if 'image' in c.lower() and 'url' in c.lower()), None)
-
     if missing:
-        raise GenerationError(f"CSV missing required columns: {', '.join(missing)}")
-    if not url_col and not images_data:
-        raise GenerationError(
-            "❌ No image URLs in CSV and no JSON provided. "
-            "Please include a CSV column of image URLs or upload a valid JSON with images."
-        )
+        raise GenerationError(f"❌ Missing columns in CSV: {', '.join(missing)}")
 
-    # Validate JSON if provided
-    image_map: Dict[tuple, List[str]] = {}
+    url_col = next((c for c in df.columns if 'image' in c.lower() and 'url' in c.lower()), None)
+    image_map = {}
+
     if images_data:
         try:
             validate_images_json(images_data)
+            for entry in images_data:
+                key = (entry['listingId'], entry['productId'])
+                urls = [img['imageURL'] for img in entry['images']]
+                image_map[key] = urls
         except Exception as e:
             raise GenerationError(f"❌ Invalid images JSON: {e}")
 
-        for entry in images_data:
-            key = (entry['listingId'], entry['productId'])
-            urls = [img['imageURL'] for img in entry['images']]
-            image_map[key] = urls
-
-    # Iterate and generate
+    # Process each row
     for _, row in df.iterrows():
-        lid, pid = row['Listing Id'], row['Product Id']
-        title, desc = row['Title'], row['Description']
-        key = (lid, pid)
+        lid, pid = str(row['Listing Id']), str(row['Product Id'])
+        title, desc = str(row['Title']), str(row['Description'])
+        key = (int(lid), int(pid)) if all(i.isdigit() for i in [lid, pid]) else (lid, pid)
 
-        # Get URLs from JSON map
+        # Fetch image URLs
         urls = image_map.get(key, [])
-        # Fallback to CSV URL column
         if not urls and url_col:
             raw = str(row[url_col] or "")
-            parts = [u.strip() for u in raw.split(',')]
-            urls = [u for u in parts if re.search(r'\.(png|jpe?g)(\?|$)', u, re.IGNORECASE)]
+            urls = [u.strip() for u in raw.split(',') if re.search(r'\.(png|jpe?g)(\?|$)', u, re.IGNORECASE)]
 
         if not urls:
-            log.warning(f"Skipping {lid}/{pid}: no valid image URLs")
+            log.warning(f"⚠️ Skipping {lid}/{pid} – No valid image URLs")
             continue
         if not title or not desc:
-            log.warning(f"Skipping {lid}/{pid}: missing title/description")
+            log.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
             continue
 
-        # Workspace & call single
         with temp_workspace() as tmp:
             svc_cfg = ServiceConfig(
                 csv_file=cfg.csv_file,
@@ -187,25 +169,25 @@ def generate_batch_from_csv(
             try:
                 result = generate_for_single(
                     cfg=svc_cfg,
-                    listing_id=str(lid),
-                    product_id=str(pid),
-                    title=str(title),
-                    description=str(desc),
+                    listing_id=lid,
+                    product_id=pid,
+                    title=title,
+                    description=desc,
                     image_urls=urls,
                 )
             except GenerationError as ge:
-                log.error(f"{lid}/{pid} generation failed: {ge}")
-                raise GenerationError(ge)
+                log.error(f"❌ {lid}/{pid} generation failed: {ge}")
+                continue
 
-            # Copy outputs
+            # Save files to output folder
             dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")
             os.makedirs(dest, exist_ok=True)
-            for path in (result.video_path, result.blog_file, result.title_file):
-                shutil.copy(path, os.path.join(dest, os.path.basename(path)))
-            log.info(f"Saved outputs for {lid}/{pid} to {dest}")
+            for f in [result.video_path, result.blog_file, result.title_file]:
+                shutil.copy(f, os.path.join(dest, os.path.basename(f)))
+            log.info(f"✅ Saved outputs for {lid}/{pid} to {dest}")
 
 
-
+# ─── Transcript Generation ───
 def _generate_transcript(title: str, description: str) -> str:
     prompt = (
         f"You are the world’s best script writer for product videos. "
@@ -213,20 +195,19 @@ def _generate_transcript(title: str, description: str) -> str:
         "End with 'Available on Our Website.'"
     )
     try:
-        resp = openai.ChatCompletion.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=500
         )
-        return resp.choices[0].message.content.strip()
-    except openai.error.RateLimitError as e:
-        raise GenerationError(f"❌ OpenAI Error: {e}")
+        return response.choices[0].message.content.strip()
     except openai.error.OpenAIError as e:
-        raise GenerationError(f"❌ Script generation failed: {e}")
+        raise GenerationError(f"❌ OpenAI error: {e}")
     except Exception:
-        raise GenerationError("❌ Unexpected error generating script – please retry.")
+        raise GenerationError("⚠️ Unexpected error generating transcript.")
 
 
+# ─── Video Assembly ───
 def _assemble_video(
     images: List[str],
     narration_text: str,
@@ -237,7 +218,7 @@ def _assemble_video(
     workdir: str,
     basename: str,
 ) -> str:
-    # create narration audio
+    # Generate narration
     try:
         tts = gTTS(text=narration_text, lang="en")
         audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
@@ -246,28 +227,29 @@ def _assemble_video(
         raise GenerationError(f"❌ Voiceover generation failed: {e}")
     audio_clip = AudioFileClip(audio_path)
 
-    # create image sequence clip
+    # Image sequence
     clip = ImageSequenceClip(images, fps=1).set_audio(audio_clip)
 
-    # title overlay
+    # Title overlay
     font_path = os.path.join(fonts_folder, "Poppins-Bold.ttf")
-    txt_clip = (TextClip(title_text, fontsize=30, font=font_path,
-                         color="white", method="caption",
-                         size=(int(clip.w*0.8), None))
-                .set_position((50,50)).set_duration(clip.duration))
+    txt_clip = (
+        TextClip(title_text, fontsize=30, font=font_path,
+                 color="white", method="caption",
+                 size=(int(clip.w * 0.8), None))
+        .set_position((50, 50))
+        .set_duration(clip.duration)
+    )
 
-    # compose all
     layers = [clip, txt_clip]
     if logo_clip:
         layers.append(logo_clip.set_duration(clip.duration))
+
     final = CompositeVideoClip(layers)
 
-    # write file
+    # Output video
     out_path = os.path.join(workdir, f"{basename}.mp4")
     try:
         final.write_videofile(out_path, codec="libx264", audio_codec="aac")
-    except OSError as e:
-        raise GenerationError(f"❌ Video encoding failed: {e}")
-    except Exception:
-        raise GenerationError("❌ Unexpected error during video rendering.")
+    except Exception as e:
+        raise GenerationError(f"❌ Video rendering failed: {e}")
     return out_path
