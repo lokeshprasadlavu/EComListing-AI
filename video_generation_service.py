@@ -7,11 +7,10 @@ from typing import List, Dict, Optional
 
 import pandas as pd
 import openai
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import (
     ImageSequenceClip,
     AudioFileClip,
-    TextClip,
     ImageClip,
     CompositeVideoClip,
 )
@@ -223,6 +222,7 @@ def _assemble_video(
     workdir: str,
     basename: str,
 ) -> str:
+    # Step 1: Generate narration
     try:
         tts = gTTS(text=narration_text, lang="en")
         audio_path = os.path.join(audio_folder, f"{basename}_narration.mp3")
@@ -230,31 +230,50 @@ def _assemble_video(
     except Exception as e:
         raise GenerationError(f"❌ Voiceover generation failed: {e}")
 
+    # Step 2: Create audio clip
     audio_clip = AudioFileClip(audio_path)
+
+    # Step 3: Create image clip
     clip = ImageSequenceClip(images, fps=1).set_audio(audio_clip)
 
+    # Step 4: Create PIL text overlay as ImageClip
     font_path = os.path.join(fonts_folder, "Poppins-Bold.ttf")
     if not os.path.exists(font_path):
         raise GenerationError(f"Font not found: {font_path}")
 
-    txt_clip = (
-        TextClip(title_text, fontsize=30, font=font_path,
-                 color="white",
-                 size=(int(clip.w * 0.8), None))
-        .set_position((50, 50))
-        .set_duration(clip.duration)
-    )
+    try:
+        # Create transparent image for text
+        txt_img = Image.new("RGBA", (clip.w, 100), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(txt_img)
+        font = ImageFont.truetype(font_path, 30)
 
+        # Centered title
+        text_width, text_height = draw.textsize(title_text, font=font)
+        position = ((clip.w - text_width) // 2, 10)
+        draw.text(position, title_text, font=font, fill=(255, 255, 255, 255))
+
+        # Save text image
+        txt_path = os.path.join(workdir, f"{basename}_text.png")
+        txt_img.save(txt_path)
+
+        # Convert to ImageClip
+        txt_clip = ImageClip(txt_path).set_duration(clip.duration)
+    except Exception as e:
+        raise GenerationError(f"❌ Title overlay creation failed: {e}")
+
+    # Step 5: Combine layers
     layers = [clip, txt_clip]
     if logo_clip:
         layers.append(logo_clip.set_duration(clip.duration))
 
     final = CompositeVideoClip(layers)
-    out_path = os.path.join(workdir, f"{basename}.mp4")
 
+    # Step 6: Export video
+    out_path = os.path.join(workdir, f"{basename}.mp4")
     try:
         final.write_videofile(out_path, codec="libx264", audio_codec="aac")
     except Exception as e:
         raise GenerationError(f"❌ Video rendering failed: {e}")
 
     return out_path
+
