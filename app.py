@@ -15,6 +15,10 @@ import drive_db
 from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, temp_workspace
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
+st.write("✅ Streamlit version:", st.__version__)
+st.write("✅ Has experimental_rerun:", hasattr(st, "experimental_rerun"))
+
+
 # ─── Persistent Cache Helper ───
 def get_session_path(key, default=None):
     if key not in st.session_state:
