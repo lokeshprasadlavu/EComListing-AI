@@ -185,8 +185,8 @@ if mode == "Single Product":
                 except GenerationError as ge:
                     st.error(str(ge))
                     st.stop()
-                except Exception:
-                    st.error("⚠️ Unexpected error. Please check your inputs and try again.")
+                except Exception as e:
+                    st.error("⚠️ Unexpected error. Please check your inputs and try again.": f"{e}")
                     st.stop()
 
                 st.session_state.last_single_result = result
