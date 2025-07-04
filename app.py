@@ -15,10 +15,6 @@ import drive_db
 from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, temp_workspace
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
-st.write("✅ Streamlit version:", st.__version__)
-st.write("✅ Has experimental_rerun:", hasattr(st, "experimental_rerun"))
-
-
 # ─── Persistent Cache Helper ───
 def get_session_path(key, default=None):
     if key not in st.session_state:
@@ -89,6 +85,16 @@ def init_session_state():
         st.session_state.setdefault(key, val)
 
 init_session_state()
+
+# Apply pending reset if requested
+if "_force_reset" in st.session_state:
+    st.session_state.title = st.session_state._force_reset["title"]
+    st.session_state.description = st.session_state._force_reset["description"]
+    st.session_state.uploaded_image_paths = st.session_state._force_reset["uploaded_image_paths"]
+    st.session_state.input_signature = st.session_state._force_reset["input_signature"]
+    st.session_state.show_output_radio_single = True
+    del st.session_state._force_reset
+
 
 # ─── Page Config ───
 st.set_page_config(page_title="EComListing AI", layout="wide")
@@ -183,8 +189,14 @@ if mode == "Single Product":
         ).hexdigest()
         st.session_state.show_output_radio_single = True
 
-        # Force rerun to reset UI and reinitialize state cleanly
-        st.experimental_rerun()
+        st.session_state._force_reset = {
+        "title": title,
+        "description": description,
+        "uploaded_image_paths": saved_paths,
+        "input_signature": hashlib.md5(
+            (title + description + "".join(sorted([img.name for img in uploaded_images]))).encode()
+        ).hexdigest()
+    }
 
 
     if st.session_state.show_output_radio_single:
