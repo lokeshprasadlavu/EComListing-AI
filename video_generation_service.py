@@ -69,6 +69,12 @@ def generate_for_single(
     local_images = download_images(image_urls, workdir)
     if not local_images:
         raise GenerationError("❌ No images downloaded – check your URLs.")
+    for img in local_images:
+        if not os.path.exists(img):
+            raise GenerationError(f"❌ Image file missing: {img}")
+    for img in local_images:
+        if os.path.getsize(img) == 0:
+            raise GenerationError(f"❌ Image file corrupted (0 bytes): {img}")
 
     # Logo
     logo_clip = None
@@ -222,7 +228,9 @@ def _assemble_video(
     except Exception as e:
         raise GenerationError(f"❌ Voiceover generation failed: {e}")
 
-    # Create audio clip
+    # Create audio clip 
+    if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 1024:
+        raise GenerationError("❌ Audio file corrupted or not saved properly.")
     audio_clip = AudioFileClip(audio_path)
 
     if not images:
@@ -275,5 +283,14 @@ def _assemble_video(
         final.write_videofile(out_path, codec="libx264", audio_codec="aac")
     except Exception as e:
         raise GenerationError(f"❌ Video rendering failed: {e}")
+    finally:
+        # Always release resources
+        final.close()
+        audio_clip.close()
+        clip.close()
+        if logo_clip:
+            logo_clip.close()
+        if 'txt_clip' in locals():
+            txt_clip.close()
 
     return out_path
