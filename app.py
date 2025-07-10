@@ -66,7 +66,7 @@ mode = st.sidebar.radio("Choose Mode", ["Single Product", "Batch of Products"], 
 if st.session_state.last_mode != mode:
     full_reset_session_state()
     st.session_state.last_mode = mode
-    st.experimental_rerun()
+    st.rerun()
 
 # ─── 🎯 Single Product ───
 if mode == "Single Product":
