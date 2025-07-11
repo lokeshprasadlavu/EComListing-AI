@@ -24,9 +24,20 @@ def init_drive_service(
 ):
     """
     Returns a Google Drive v3 service client.
-    - If sa_cfg is provided: use service-account.
-    - Else if oauth_cfg is provided: run or reuse OAuth refresh flow.
+    - If oauth_cfg is provided: use OAuth flow with refresh token.
+    - Else if sa_cfg is provided: use service account.
     """
+    if oauth_cfg:
+        from google.oauth2.credentials import Credentials
+        creds = Credentials(
+            token=None,
+            refresh_token=oauth_cfg.refresh_token,
+            token_uri=oauth_cfg.token_uri,
+            client_id=oauth_cfg.client_id,
+            client_secret=oauth_cfg.client_secret
+        )
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
+
     if sa_cfg:
         creds = service_account.Credentials.from_service_account_info(
             {
@@ -45,41 +56,4 @@ def init_drive_service(
         )
         return build("drive", "v3", credentials=creds, cache_discovery=False)
 
-    if oauth_cfg:
-        token_path = ".streamlit/drive_token.pickle"
-        creds = None
-        # load existing token if present
-        if os.path.exists(token_path):
-            import pickle
-            with open(token_path, "rb") as f:
-                creds = pickle.load(f)
-
-        # refresh or request new
-        if creds and creds.valid:
-            pass
-        elif creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_config(
-                {
-                    "installed": {
-                        "client_id":     oauth_cfg.client_id,
-                        "client_secret": oauth_cfg.client_secret,
-                        "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"],
-                        "auth_uri":      "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri":     "https://oauth2.googleapis.com/token",
-                    }
-                },
-                scopes=DRIVE_SCOPES,
-            )
-            creds = flow.run_console()
-            # persist for next run
-            import pickle
-            os.makedirs(os.path.dirname(token_path), exist_ok=True)
-            with open(token_path, "wb") as f:
-                pickle.dump(creds, f)
-
-        return build("drive", "v3", credentials=creds, cache_discovery=False)
-
     raise ValueError("Must provide either OAuthConfig or ServiceAccountConfig to init drive.")
-
