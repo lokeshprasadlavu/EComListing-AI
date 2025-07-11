@@ -196,6 +196,7 @@ def _generate_transcript(title: str, description: str) -> str:
         f"You are the world’s best script writer for product videos. "
         f"Write a one-minute voiceover script for:\nTitle: {title}\nDescription: {description}\n"
         "End with 'Available on Our Website.'"
+        f"Do not format as a video script or include voiceover-style text. Write as a typical blog article."
     )
     try:
         response = openai.ChatCompletion.create(
