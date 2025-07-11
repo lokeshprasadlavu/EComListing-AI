@@ -100,7 +100,7 @@ def generate_video(
     final_clip = concatenate_videoclips(clips).set_audio(audio_clip)
 
     output_path = os.path.join(workdir, f"{base}.mp4")
-    final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+    final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=24)
 
     blog_file = os.path.join(workdir, f"{base}_blog.txt")
     title_file = os.path.join(workdir, f"{base}_title.txt")
