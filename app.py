@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import shutil
 import tempfile
 import uuid
@@ -184,7 +185,6 @@ else:
             st.error("❗ Please upload a valid Products CSV.")
             st.stop()
 
-        st.session_state.last_batch_folder = None
         df = pd.read_csv(st.session_state.batch_csv_file_path)
         df.columns = [c.strip() for c in df.columns]
 
@@ -233,35 +233,66 @@ else:
                 output_base_folder=base_output,
             )
 
-            try:
-                generate_batch_from_csv(cfg=svc_cfg, images_data=st.session_state.batch_images_data)
-            except GenerationError as ge:
-                st.error(str(ge))
-                st.stop()
+            df = pd.read_csv(svc_cfg.csv_file)
+            df.columns = [c.strip() for c in df.columns]
+            img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
+            images_data = st.session_state.batch_images_data
 
-            st.session_state.last_batch_folder = base_output
+            for _, row in df.iterrows():
+                lid, pid = str(row["Listing Id"]), str(row["Product Id"])
+                title, desc = str(row["Title"]), str(row["Description"])
+                key = (int(lid), int(pid)) if lid.isdigit() and pid.isdigit() else (lid, pid)
 
-            for sub in os.listdir(base_output):
+                urls = []
+                if images_data:
+                    for entry in images_data:
+                        if (entry["listingId"], entry["productId"]) == key:
+                            urls = [img["imageURL"] for img in entry["images"]]
+                            break
+                elif img_col:
+                    raw = str(row[img_col] or "")
+                    urls = [u.strip() for u in raw.split(",") if re.search(r"\.(png|jpe?g)(\?|$)", u, re.IGNORECASE)]
+
+                if not urls:
+                    st.warning(f"⚠️ Skipping {lid}/{pid} – No valid image URLs")
+                    continue
+                if not title or not desc:
+                    st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
+                    continue
+
+                try:
+                    result = generate_for_single(
+                        cfg=svc_cfg,
+                        listing_id=lid,
+                        product_id=pid,
+                        title=title,
+                        description=desc,
+                        image_urls=urls,
+                    )
+                except GenerationError as ge:
+                    st.warning(f"⚠️ Skipping {lid}/{pid} – {ge}")
+                    continue
+
+                sub = f"{lid}_{pid}"
                 subdir = os.path.join(base_output, sub)
-                if os.path.isdir(subdir):
-                    st.subheader(f"Results for {sub}")
-                    vid = os.path.join(subdir, f"{sub}.mp4")
-                    blog = os.path.join(subdir, f"{sub}_blog.txt")
-                    if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
-                        st.video(vid)
-                    if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
-                        st.markdown("**Blog Content**")
-                        st.write(open(blog, 'r').read())
 
-                    upload_subdir = os.path.join(upload_cache_root, sub)
-                    os.makedirs(upload_subdir, exist_ok=True)
-                    for f in os.listdir(subdir):
-                        shutil.copy(os.path.join(subdir, f), os.path.join(upload_subdir, f))
+                # Show UI output immediately
+                st.subheader(f"Results for {sub}")
+                if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(result.video_path):
+                    st.video(result.video_path)
+                if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(result.blog_file):
+                    st.markdown("**Blog Content**")
+                    st.write(open(result.blog_file, 'r').read())
 
-                    try:
-                        upload_output_files_to_drive(subdir=upload_subdir, parent_id=outputs_id)
-                    except Exception as e:
-                        st.warning(f"⚠️ Failed to upload batch outputs for {sub}: {e}")
-                    finally:
-                        shutil.rmtree(upload_subdir, ignore_errors=True)
+                # Upload to Drive immediately
+                upload_subdir = os.path.join(upload_cache_root, sub)
+                os.makedirs(upload_subdir, exist_ok=True)
+                for f in [result.video_path, result.blog_file, result.title_file]:
+                    shutil.copy(f, os.path.join(upload_subdir, os.path.basename(f)))
 
+                try:
+                    upload_output_files_to_drive(subdir=upload_subdir, parent_id=outputs_id)
+                except Exception as e:
+                    st.warning(f"⚠️ Upload failed for {sub}: {e}")
+                finally:
+                    shutil.rmtree(upload_subdir, ignore_errors=True)
