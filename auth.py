@@ -1,12 +1,8 @@
 # auth.py
 import os
 import openai
-from typing import Union
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
-
 from config import OAuthConfig, ServiceAccountConfig
 
 # OpenAI setup

@@ -1,8 +1,6 @@
 # config.py
-import os
-import json
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional
 
 import streamlit as st
 
