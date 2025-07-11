@@ -11,12 +11,10 @@ from typing import List
 import requests
 import fastjsonschema
 from fastjsonschema import JsonSchemaException
-from PIL import Image
 
-from drive_db import list_files, download_file, upload_file
+from drive_db import list_files, download_file
 
 # ─── File System Utilities ───
-
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
     return path
@@ -36,7 +34,6 @@ def get_persistent_cache_dir(subdir: str):
 
 
 # ─── Downloads ───
-
 def download_images(image_urls: List[str], target_dir: str) -> List[str]:
     ensure_dir(target_dir)
     local_paths = []
@@ -60,7 +57,6 @@ def download_images(image_urls: List[str], target_dir: str) -> List[str]:
 
 
 # ─── Fonts & Logo Preload ───
-
 def extract_fonts(zip_path: str, extract_to: str):
     try:
         ensure_dir(extract_to)
@@ -107,7 +103,6 @@ def preload_logo_from_drive(logo_folder_id: str) -> str:
 
 
 # ─── JSON Schema Validation ───
-
 images_json_schema = {
     "type": "array",
     "items": {
@@ -152,7 +147,6 @@ def validate_images_json(data):
 
 
 # ─── Utility Functions ───
-
 def slugify(text: str) -> str:
     s = re.sub(r'[^a-zA-Z0-9]+', '_', text)
     return s.strip('_').lower()
