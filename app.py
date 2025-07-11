@@ -264,3 +264,4 @@ else:
                         st.warning(f"⚠️ Failed to upload batch outputs for {sub}: {e}")
                     finally:
                         shutil.rmtree(upload_subdir, ignore_errors=True)
+
