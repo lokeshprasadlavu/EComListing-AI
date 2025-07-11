@@ -217,11 +217,12 @@ else:
 
         st.session_state.update({
             "batch_images_data": images_data,
-            "batch_csv_path": st.session_state.batch_csv_file_path,
-            "batch_json_path": st.session_state.batch_json_file_path,
+            "batch_csv_path": st.session_state.get("batch_csv_file_path", ""),
+            "batch_json_path": st.session_state.get("batch_json_file_path", ""),
             "show_output_radio_batch": True,
             "last_batch_folder": None,
         })
+
 
     if st.session_state.get("show_output_radio_batch"):
         st.session_state.output_options = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
