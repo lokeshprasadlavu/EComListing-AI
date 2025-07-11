@@ -27,7 +27,7 @@ def full_reset_session_state():
         "last_single_result", "last_batch_folder", "uploaded_image_paths",
         "batch_csv_path", "batch_json_path", "batch_images_data",
         "batch_csv_file_path", "batch_json_file_path", "input_signature",
-        "previous_input_hash"
+        "previous_input_hash", "title", "description"
     ]
     for key in keys_to_clear:
         st.session_state.pop(key, None)
