@@ -1,11 +1,9 @@
 import logging
 import os
-import re
 import shutil
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Optional
 
-import pandas as pd
 import openai
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import (
@@ -48,7 +46,7 @@ class GenerationError(Exception):
     pass
 
 # ─── Single Product Generation ───
-def generate_for_single(
+def generate_video(
     cfg: ServiceConfig,
     listing_id: Optional[str],
     product_id: Optional[str],

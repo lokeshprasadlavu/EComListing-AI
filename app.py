@@ -13,7 +13,7 @@ from config import load_config
 from auth import get_openai_client, init_drive_service
 import drive_db
 from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
-from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
+from video_generation_service import generate_video, ServiceConfig, GenerationError
 
 # ─── Persistent Upload Cache ───
 upload_cache_root = "upload_cache"
@@ -129,7 +129,7 @@ if mode == "Single Product":
             )
 
             try:
-                result = generate_for_single(
+                result = generate_video(
                     cfg=svc_cfg,
                     listing_id=None,
                     product_id=None,
@@ -261,7 +261,7 @@ else:
                     continue
 
                 try:
-                    result = generate_for_single(
+                    result = generate_video(
                         cfg=svc_cfg,
                         listing_id=lid,
                         product_id=pid,
