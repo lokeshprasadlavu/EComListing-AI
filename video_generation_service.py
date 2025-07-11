@@ -156,7 +156,7 @@ def generate_video(
 def generate_transcript(title: str, description: str) -> str:
     prompt = (
         f"You are the world’s best script writer for product videos. "
-        f"Write a one-minute voiceover script for:\nTitle: {title}\nDescription: {description}\n"
+        f"Write a voiceover script in **130 to 140 words** for:\nTitle: {title}\nDescription: {description}\n"
         "End with 'Available on Our Website.'"
         f"Do not format as a video script or include voiceover-style text. Write as a typical blog article."
     )
