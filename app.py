@@ -4,7 +4,6 @@ import shutil
 import tempfile
 import uuid
 import hashlib
-import atexit
 
 import streamlit as st
 import pandas as pd
@@ -14,6 +13,11 @@ from auth import get_openai_client, init_drive_service
 import drive_db
 from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
+
+# ─── Persistent Upload Cache ───
+upload_cache_root = "upload_cache"
+shutil.rmtree(upload_cache_root, ignore_errors=True)
+os.makedirs(upload_cache_root, exist_ok=True)
 
 # ─── Session Helpers ───
 def full_reset_session_state():
@@ -35,12 +39,6 @@ def detect_and_reset_on_input_change(new_title, new_desc, new_files):
         st.session_state.description = new_desc
         st.session_state.uploaded_image_paths = []
         st.session_state.previous_input_hash = input_hash
-
-# ─── Cleanup persistent upload cache on exit ───
-def cleanup_upload_cache():
-    shutil.rmtree("upload_cache", ignore_errors=True)
-
-atexit.register(cleanup_upload_cache)
 
 # ─── Config and Services ───
 st.set_page_config(page_title="EComListing AI", layout="wide")
@@ -146,16 +144,13 @@ if mode == "Single Product":
                     st.markdown("**Blog Content**")
                     st.write(open(result.blog_file, 'r').read())
 
-                # 🔁 Move to persistent upload cache
-                upload_folder = os.path.join("upload_cache", slug)
+                upload_folder = os.path.join(upload_cache_root, slug)
                 os.makedirs(upload_folder, exist_ok=True)
                 for f in [result.video_path, result.blog_file, result.title_file]:
                     shutil.copy(f, os.path.join(upload_folder, os.path.basename(f)))
 
-                # ☁️ Upload to Drive
                 upload_output_files_to_drive(subdir=upload_folder, parent_id=outputs_id)
 
-                # 🧹 Cleanup
                 shutil.rmtree(upload_folder, ignore_errors=True)
 
             except GenerationError as ge:
@@ -258,8 +253,7 @@ else:
                         st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
 
-                    # 🔁 Copy to persistent folder
-                    upload_subdir = os.path.join("upload_cache", sub)
+                    upload_subdir = os.path.join(upload_cache_root, sub)
                     os.makedirs(upload_subdir, exist_ok=True)
                     for f in os.listdir(subdir):
                         shutil.copy(os.path.join(subdir, f), os.path.join(upload_subdir, f))
