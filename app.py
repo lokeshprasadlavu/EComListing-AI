@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import uuid
 import hashlib
+import atexit
 
 import streamlit as st
 import pandas as pd
@@ -14,14 +15,14 @@ import drive_db
 from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
 from video_generation_service import generate_for_single, generate_batch_from_csv, ServiceConfig, GenerationError
 
-# ─── 🔁 Session Management ───
+# ─── Session Helpers ───
 def full_reset_session_state():
     keys_to_clear = [
         "output_options", "show_output_radio_single", "show_output_radio_batch",
         "last_single_result", "last_batch_folder", "uploaded_image_paths",
         "batch_csv_path", "batch_json_path", "batch_images_data",
         "batch_csv_file_path", "batch_json_file_path", "input_signature",
-        "previous_input_hash", "title", "description"
+        "previous_input_hash"
     ]
     for key in keys_to_clear:
         st.session_state.pop(key, None)
@@ -35,7 +36,13 @@ def detect_and_reset_on_input_change(new_title, new_desc, new_files):
         st.session_state.uploaded_image_paths = []
         st.session_state.previous_input_hash = input_hash
 
-# ─── ⚙️ Config and Drive ───
+# ─── Cleanup persistent upload cache on exit ───
+def cleanup_upload_cache():
+    shutil.rmtree("upload_cache", ignore_errors=True)
+
+atexit.register(cleanup_upload_cache)
+
+# ─── Config and Services ───
 st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
 st.markdown("🚀 AI-Powered Multimedia Content for your eCommerce Listings.")
@@ -57,7 +64,7 @@ logo_id = drive_db.find_or_create_folder("logo", parent_id=cfg.drive_folder_id)
 fonts_folder = preload_fonts_from_drive(fonts_id)
 logo_path = preload_logo_from_drive(logo_id)
 
-# ─── 🎛️ Mode Selection ───
+# ─── Mode Selection ───
 if "last_mode" not in st.session_state:
     st.session_state.last_mode = "Single Product"
 
@@ -66,7 +73,6 @@ mode = st.sidebar.radio("Choose Mode", ["Single Product", "Batch of Products"], 
 if st.session_state.last_mode != mode:
     full_reset_session_state()
     st.session_state.last_mode = mode
-    st.rerun()
 
 # ─── 🎯 Single Product ───
 if mode == "Single Product":
@@ -96,8 +102,6 @@ if mode == "Single Product":
             saved_paths.append(path)
 
         st.session_state.uploaded_image_paths = saved_paths
-        st.session_state.title = title
-        st.session_state.description = description
         st.session_state.input_signature = hashlib.md5((title + description + "".join(sorted([img.name for img in uploaded_images]))).encode()).hexdigest()
         st.session_state.show_output_radio_single = True
 
@@ -135,14 +139,24 @@ if mode == "Single Product":
                     image_urls=image_urls,
                 )
                 st.session_state.last_single_result = result
-                st.subheader("🎞️ Generated Output")
+                st.subheader("Generated Output")
                 if st.session_state.output_options in ("Video only", "Video + Blog"):
                     st.video(result.video_path)
                 if st.session_state.output_options in ("Blog only", "Video + Blog"):
-                    st.markdown("**📝 Blog Content**")
+                    st.markdown("**Blog Content**")
                     st.write(open(result.blog_file, 'r').read())
 
-                upload_output_files_to_drive(subdir=output_dir, parent_id=outputs_id)
+                # 🔁 Move to persistent upload cache
+                upload_folder = os.path.join("upload_cache", slug)
+                os.makedirs(upload_folder, exist_ok=True)
+                for f in [result.video_path, result.blog_file, result.title_file]:
+                    shutil.copy(f, os.path.join(upload_folder, os.path.basename(f)))
+
+                # ☁️ Upload to Drive
+                upload_output_files_to_drive(subdir=upload_folder, parent_id=outputs_id)
+
+                # 🧹 Cleanup
+                shutil.rmtree(upload_folder, ignore_errors=True)
 
             except GenerationError as ge:
                 st.error(str(ge))
@@ -151,7 +165,7 @@ if mode == "Single Product":
                 st.error(f"⚠️ Unexpected error: {e}")
                 st.stop()
 
-# ─── 📦 Batch Product ───
+# ─── 📦 Batch Generation ───
 else:
     st.header("📦 Batch Generation")
 
@@ -235,16 +249,24 @@ else:
             for sub in os.listdir(base_output):
                 subdir = os.path.join(base_output, sub)
                 if os.path.isdir(subdir):
-                    st.subheader(f"📁 Results for {sub}")
+                    st.subheader(f"Results for {sub}")
                     vid = os.path.join(subdir, f"{sub}.mp4")
                     blog = os.path.join(subdir, f"{sub}_blog.txt")
                     if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(vid):
                         st.video(vid)
                     if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(blog):
-                        st.markdown("**📝 Blog Content**")
+                        st.markdown("**Blog Content**")
                         st.write(open(blog, 'r').read())
 
+                    # 🔁 Copy to persistent folder
+                    upload_subdir = os.path.join("upload_cache", sub)
+                    os.makedirs(upload_subdir, exist_ok=True)
+                    for f in os.listdir(subdir):
+                        shutil.copy(os.path.join(subdir, f), os.path.join(upload_subdir, f))
+
                     try:
-                        upload_output_files_to_drive(subdir=subdir, parent_id=outputs_id)
+                        upload_output_files_to_drive(subdir=upload_subdir, parent_id=outputs_id)
                     except Exception as e:
                         st.warning(f"⚠️ Failed to upload batch outputs for {sub}: {e}")
+                    finally:
+                        shutil.rmtree(upload_subdir, ignore_errors=True)
