@@ -32,14 +32,20 @@ def full_reset_session_state():
     for key in keys_to_clear:
         st.session_state.pop(key, None)
 
-def detect_and_reset_on_input_change(new_title, new_desc, new_files):
-    input_hash = hashlib.md5((new_title + new_desc + "".join(sorted([f.name for f in new_files]))).encode()).hexdigest()
-    if st.session_state.get("previous_input_hash") != input_hash:
+def detect_and_reset_on_input_change(context_id: str, input_parts: list):
+    """
+    Detects changes in inputs and resets the session state if any changes are detected.
+    - context_id: A unique identifier for grouping state hashes (e.g. 'single', 'batch').
+    - input_parts: List of strings used to build a unique hash representing current input state.
+    """
+    combined = ''.join(sorted(input_parts))
+    input_hash = hashlib.md5(combined.encode()).hexdigest()
+    hash_key = f"previous_input_hash_{context_id}"
+
+    if st.session_state.get(hash_key) != input_hash:
         full_reset_session_state()
-        st.session_state.title = new_title
-        st.session_state.description = new_desc
-        st.session_state.uploaded_image_paths = []
-        st.session_state.previous_input_hash = input_hash
+        st.session_state[hash_key] = input_hash
+
 
 # ─── Config and Services ───
 st.set_page_config(page_title="EComListing AI", layout="wide")
@@ -81,7 +87,8 @@ if mode == "Single Product":
     description = st.text_area("Product Description", height=150, value=st.session_state.get("description", ""))
     uploaded_images = st.file_uploader("Upload Product Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-    detect_and_reset_on_input_change(title, description, uploaded_images or [])
+    detect_and_reset_on_input_change("single", [title, description] + [f.name for f in uploaded_images or []])
+
 
     if st.button("Generate"):
         if not title.strip() or not description.strip():
@@ -179,6 +186,11 @@ else:
         with open(path, "wb") as f:
             f.write(up_json.getvalue())
         st.session_state.batch_json_file_path = path
+
+    # 🔄 Detect and reset session state if CSV or JSON file changes
+    csv_name = up_csv.name if up_csv else ""
+    json_name = up_json.name if up_json else ""
+    detect_and_reset_on_input_change("batch", [csv_name, json_name])
 
     if st.button("Run Batch"):
         if not st.session_state.get("batch_csv_file_path"):
