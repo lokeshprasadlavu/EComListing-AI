@@ -84,6 +84,15 @@ def upload_and_cleanup(local_folder, files, drive_folder_id):
     upload_output_files_to_drive(subdir=local_folder, parent_id=drive_folder_id)
     shutil.rmtree(local_folder, ignore_errors=True)
 
+def extract_image_urls_from_row(row, df_columns):
+    col_map = {c.lower(): c for c in df_columns}
+    img_col = next((col_map[c] for c in col_map if "image" in c and "url" in c), None)
+    if not img_col:
+        return []
+    raw = str(row.get(img_col, ""))
+    split_urls = re.split(r"[,\n;]", raw)
+    return [u.strip() for u in split_urls if re.search(r"\.(png|jpe?g)(\?|$)", u, re.IGNORECASE)]
+
 # ⚙️ Config and Services
 st.set_page_config(page_title="EComListing AI", layout="wide")
 st.title("EComListing AI")
@@ -191,7 +200,7 @@ else:
             st.error("❗ Please upload a valid Products CSV.")
             st.stop()
 
-        df = pd.read_csv(st.session_state.batch_csv_file_path)
+        df = pd.read_csv(st.session_state.batch_csv_file_path, low_memory=False)
         df.columns = [c.strip() for c in df.columns]
 
         required_cols = {"Listing Id", "Product Id", "Title", "Description"}
@@ -200,13 +209,10 @@ else:
             st.error(f"❌ CSV is missing required columns: {', '.join(missing)}")
             st.stop()
 
-        df.columns = [c.strip() for c in df.columns]
-        col_map = {c.lower(): c for c in df.columns}
-        img_col = next((col_map[c] for c in col_map if "image" in c and "url" in c), None)
-
+        img_col_exists = any("image" in c.lower() and "url" in c.lower() for c in df.columns)
         images_data = []
 
-        if img_col not in df.columns and not st.session_state.get("batch_json_file_path"):
+        if not img_col_exists and not st.session_state.get("batch_json_file_path"):
             st.error("📂 Provide image URLs in CSV or upload JSON.")
             st.stop()
         elif st.session_state.get("batch_json_file_path"):
@@ -226,7 +232,6 @@ else:
             "last_batch_folder": None,
         })
 
-
     if st.session_state.get("show_output_radio_batch"):
         st.session_state.output_options = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
 
@@ -236,9 +241,7 @@ else:
 
             svc_cfg = build_service_config(base_output, csv_path=st.session_state.batch_csv_path, json_path=st.session_state.batch_json_path)
 
-            df = pd.read_csv(svc_cfg.csv_file)
-            df.columns = [c.strip() for c in df.columns]
-            img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
+            df = pd.read_csv(svc_cfg.csv_file, low_memory=False)
             images_data = st.session_state.batch_images_data
 
             for _, row in df.iterrows():
@@ -252,9 +255,8 @@ else:
                         if (entry["listingId"], entry["productId"]) == key:
                             urls = [img["imageURL"] for img in entry["images"]]
                             break
-                elif img_col:
-                    raw = str(row[img_col] or "")
-                    urls = [u.strip() for u in raw.split(",") if re.search(r"\\.(png|jpe?g)(\\?|$)", u, re.IGNORECASE)]
+                else:
+                    urls = extract_image_urls_from_row(row, df.columns)
 
                 if not urls:
                     st.warning(f"⚠️ Skipping {lid}/{pid} – No valid image URLs")
