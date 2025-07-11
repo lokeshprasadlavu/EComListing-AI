@@ -242,6 +242,9 @@ else:
             svc_cfg = build_service_config(base_output, csv_path=st.session_state.batch_csv_path, json_path=st.session_state.batch_json_path)
 
             df = pd.read_csv(svc_cfg.csv_file, low_memory=False)
+            df.columns = [c.strip() for c in df.columns]
+
+            
             images_data = st.session_state.batch_images_data
 
             for _, row in df.iterrows():
