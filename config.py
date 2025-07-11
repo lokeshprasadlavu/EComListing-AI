@@ -48,6 +48,7 @@ def load_config() -> AppConfig:
             client_id     = om["client_id"],
             client_secret = om["client_secret"],
             refresh_token = om["refresh_token"],
+            token_uri     = om["token_uri"]
         )
 
     sa_cfg = None
