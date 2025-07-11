@@ -242,7 +242,17 @@ def _assemble_video(
             raise GenerationError(f"❌ Missing image file: {img_path}")
 
     # Create image clip
-    clip = ImageSequenceClip(images, fps=1).set_audio(audio_clip)
+    resized_images = []
+    base_width, base_height = Image.open(images[0]).size
+
+    for idx, path in enumerate(images):
+        img = Image.open(path).convert("RGB")
+        resized = img.resize((base_width, base_height), resample=Image.LANCZOS)
+        resized_path = os.path.join(workdir, f"resized_{idx}.jpg")
+        resized.save(resized_path)
+        resized_images.append(resized_path)
+
+    clip = ImageSequenceClip(resized_images, fps=1).set_audio(audio_clip)
 
     # Create PIL text overlay as ImageClip
     font_path = os.path.join(fonts_folder, "Poppins-Bold.ttf")
