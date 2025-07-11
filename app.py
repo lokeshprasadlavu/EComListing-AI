@@ -9,6 +9,10 @@ import hashlib
 import streamlit as st
 import pandas as pd
 
+import time
+from streamlit.runtime.scriptrunner import RerunException
+from streamlit.runtime.runtime import Runtime
+
 from config import load_config
 from auth import get_openai_client, init_drive_service
 import drive_db
@@ -41,6 +45,21 @@ def detect_and_reset_on_input_change(context_id: str, input_parts: list):
     if st.session_state.get(hash_key) != input_hash:
         full_reset_session_state()
         st.session_state[hash_key] = input_hash
+
+INACTIVITY_TIMEOUT_SECONDS = 15 * 60  # 15 minutes
+
+def handle_inactivity():
+    """Reset session if last interaction was too long ago."""
+    now = time.time()
+    last_touch = st.session_state.get("last_interaction", now)
+
+    if now - last_touch > INACTIVITY_TIMEOUT_SECONDS:
+        st.session_state.clear()
+        raise RerunException(Runtime.get_instance())  # Full app rerun
+
+    # Always update interaction timestamp
+    st.session_state["last_interaction"] = now
+
 
 # File & Output Helpers
 def save_uploaded_file(uploaded_file):
@@ -95,6 +114,7 @@ def extract_image_urls_from_row(row, df_columns):
 
 # ⚙️ Config and Services
 st.set_page_config(page_title="EComListing AI", layout="wide")
+handle_inactivity() 
 st.title("EComListing AI")
 st.markdown("🚀 AI-Powered Multimedia Content for your eCommerce Listings.")
 
@@ -244,7 +264,7 @@ else:
             df = pd.read_csv(svc_cfg.csv_file, low_memory=False)
             df.columns = [c.strip() for c in df.columns]
 
-            
+
             images_data = st.session_state.batch_images_data
 
             for _, row in df.iterrows():
