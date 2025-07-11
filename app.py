@@ -209,7 +209,7 @@ else:
         img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
         images_data = []
 
-        if "imageURL" not in df.columns and not st.session_state.get("batch_json_file_path"):
+        if img_col not in df.columns and not st.session_state.get("batch_json_file_path"):
             st.error("📂 Provide image URLs in CSV or upload JSON.")
             st.stop()
         elif st.session_state.get("batch_json_file_path"):
