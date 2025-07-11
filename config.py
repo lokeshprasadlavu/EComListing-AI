@@ -11,6 +11,7 @@ class OAuthConfig:
     client_id: str
     client_secret: str
     refresh_token: str
+    token_uri: str
 
 @dataclass
 class ServiceAccountConfig:
