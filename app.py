@@ -277,7 +277,7 @@ else:
                 subdir = os.path.join(base_output, sub)
 
                 # Show UI output immediately
-                st.subheader(f"Results for {sub}")
+                st.subheader(f"Generating for {sub}")
                 if st.session_state.output_options in ("Video only", "Video + Blog") and os.path.exists(result.video_path):
                     st.video(result.video_path)
                 if st.session_state.output_options in ("Blog only", "Video + Blog") and os.path.exists(result.blog_file):
