@@ -200,7 +200,10 @@ else:
             st.error(f"❌ CSV is missing required columns: {', '.join(missing)}")
             st.stop()
 
-        img_col = next((c for c in df.columns if "image" in c.lower() and "url" in c.lower()), None)
+        df.columns = [c.strip() for c in df.columns]
+        col_map = {c.lower(): c for c in df.columns}
+        img_col = next((col_map[c] for c in col_map if "image" in c and "url" in c), None)
+
         images_data = []
 
         if img_col not in df.columns and not st.session_state.get("batch_json_file_path"):
