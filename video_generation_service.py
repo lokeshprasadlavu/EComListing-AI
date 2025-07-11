@@ -187,7 +187,9 @@ def generate_batch_from_csv(
         dest = os.path.join(cfg.output_base_folder, f"{lid}_{pid}")
         os.makedirs(dest, exist_ok=True)
         for f in [result.video_path, result.blog_file, result.title_file]:
-            shutil.copy(f, os.path.join(dest, os.path.basename(f)))
+            dst = os.path.join(dest, os.path.basename(f))
+            if os.path.abspath(f) != os.path.abspath(dst):
+                shutil.copy(f, dst)
         log.info(f"📁 Saved: {lid}/{pid} to {dest}")
 
 # ─── Transcript Generation ───
