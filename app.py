@@ -49,14 +49,11 @@ def detect_and_reset_on_input_change(context_id: str, input_parts: list):
 def handle_inactivity():
     now = int(time.time())
     INACTIVITY_TIMEOUT_SECONDS = 20 * 60  # 20 minutes
-
     last_touch = st.session_state.get("last_interaction", now)
     is_viewing_output = st.session_state.get("is_viewing_output", False)
-
     if now - last_touch > INACTIVITY_TIMEOUT_SECONDS and not is_viewing_output:
         st.session_state.clear()
         st.rerun()
-
     # Update the timestamp
     st.session_state["last_interaction"] = now
 
@@ -158,7 +155,7 @@ if mode == "Single Product":
     valid_paths = [p for p in cached_paths if os.path.exists(p)]
 
     # This means user sees files, but nothing valid is present
-    if uploaded_images is None and not valid_paths:
+    if not valid_paths:
         st.warning("⚠️ Your uploaded files are no longer accessible due to session timeout. Please re-upload.")
         detect_and_reset_on_input_change("single", [title, description] + [f.name for f in uploaded_images or []])
 
