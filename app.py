@@ -46,18 +46,18 @@ def detect_and_reset_on_input_change(context_id: str, input_parts: list):
         full_reset_session_state()
         st.session_state[hash_key] = input_hash
 
-INACTIVITY_TIMEOUT_SECONDS = 15 * 60  # 15 minutes
-
 def handle_inactivity():
-    """Reset session if last interaction was too long ago."""
-    now = time.time()
+    now = int(time.time())
+    INACTIVITY_TIMEOUT_SECONDS = 20 * 60  # 20 minutes
+
     last_touch = st.session_state.get("last_interaction", now)
+    is_viewing_output = st.session_state.get("is_viewing_output", False)
 
-    if now - last_touch > INACTIVITY_TIMEOUT_SECONDS:
+    if now - last_touch > INACTIVITY_TIMEOUT_SECONDS and not is_viewing_output:
         st.session_state.clear()
-        raise RerunException(Runtime.get_instance())  # Full app rerun
+        st.rerun()
 
-    # Always update interaction timestamp
+    # Update the timestamp
     st.session_state["last_interaction"] = now
 
 
