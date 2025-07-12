@@ -46,7 +46,7 @@ def detect_and_reset_on_input_change(context_id: str, input_parts: list):
         full_reset_session_state()
         st.session_state[hash_key] = input_hash
 
-INACTIVITY_TIMEOUT_SECONDS = 20 * 60  # 20 minutes
+INACTIVITY_TIMEOUT_SECONDS = 5 * 60  # 20 minutes
 
 def handle_inactivity():
     now = time.time()
