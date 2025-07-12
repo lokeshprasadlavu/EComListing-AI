@@ -46,15 +46,22 @@ def detect_and_reset_on_input_change(context_id: str, input_parts: list):
         full_reset_session_state()
         st.session_state[hash_key] = input_hash
 
+INACTIVITY_TIMEOUT_SECONDS = 20 * 60  # 20 minutes
+
 def handle_inactivity():
-    now = int(time.time())
-    INACTIVITY_TIMEOUT_SECONDS = 20 * 60  # 20 minutes
+    now = time.time()
     last_touch = st.session_state.get("last_interaction", now)
-    is_viewing_output = st.session_state.get("is_viewing_output", False)
-    if now - last_touch > INACTIVITY_TIMEOUT_SECONDS and not is_viewing_output:
+
+    if now - last_touch > INACTIVITY_TIMEOUT_SECONDS:
         st.session_state.clear()
-        st.rerun()
-    # Update the timestamp
+
+        # Inject JS to reload the page
+        st.markdown("""
+            <meta http-equiv="refresh" content="0">
+            <script>window.location.reload(true);</script>
+        """, unsafe_allow_html=True)
+        st.stop()
+
     st.session_state["last_interaction"] = now
 
 
@@ -150,14 +157,7 @@ if mode == "Single Product":
     description = st.text_area("Product Description", height=150, value=st.session_state.get("description", ""))
     uploaded_images = st.file_uploader("Upload Product Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-    # Check if UI shows uploads but session doesn't have valid paths
-    cached_paths = st.session_state.get("uploaded_image_paths", [])
-    valid_paths = [p for p in cached_paths if os.path.exists(p)]
-
-    # This means user sees files, but nothing valid is present
-    if not valid_paths:
-        st.warning("⚠️ Your uploaded files are no longer accessible due to session timeout. Please re-upload.")
-        detect_and_reset_on_input_change("single", [title, description] + [f.name for f in uploaded_images or []])
+    detect_and_reset_on_input_change("single", [title, description] + [f.name for f in uploaded_images or []])
 
     if st.button("Generate"):
         if not title.strip() or not description.strip():
@@ -218,21 +218,6 @@ else:
 
     if up_json:
         st.session_state.batch_json_file_path = save_uploaded_file(up_json)
-    
-    # 🛡️ Validate uploaded file paths still exist (session may have timed out)
-    csv_path = st.session_state.get("batch_csv_file_path")
-    json_path = st.session_state.get("batch_json_file_path")
-
-    if csv_path and not os.path.exists(csv_path):
-        st.warning("⚠️ CSV file has expired or session timed out. Please re-upload.")
-        st.session_state.pop("batch_csv_file_path", None)
-        st.rerun()
-
-    if json_path and not os.path.exists(json_path):
-        st.warning("⚠️ JSON file has expired or session timed out. Please re-upload.")
-        st.session_state.pop("batch_json_file_path", None)
-        st.rerun()
-
 
     if st.button("Run Batch"):
         if not st.session_state.get("batch_csv_file_path"):
