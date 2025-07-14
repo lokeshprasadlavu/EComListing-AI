@@ -175,11 +175,20 @@ if mode == "Single Product":
         st.session_state.output_options = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
 
         if st.button("Continue", key="continue_single"):
+            # Ensure image paths are set even if session reset occurred
+            if "uploaded_image_paths" not in st.session_state or not st.session_state.uploaded_image_paths:
+                if uploaded_images:
+                    st.session_state.uploaded_image_paths = prepare_image_paths(uploaded_images)
+                else:
+                    st.error("❗ No uploaded images found. Please upload image(s) again.")
+                    st.stop()
+
             slug = slugify(title)
             output_dir = os.path.join(tempfile.gettempdir(), "outputs", slug)
             os.makedirs(output_dir, exist_ok=True)
 
             image_urls = st.session_state.uploaded_image_paths
+
             svc_cfg = build_service_config(output_dir)
 
             try:
@@ -260,6 +269,19 @@ else:
         st.session_state.output_options = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
 
         if st.button("Continue", key="continue_batch"):
+            # Fallback to rebuild session state if it was cleared after inactivity
+            if "batch_csv_file_path" not in st.session_state or not st.session_state.batch_csv_file_path:
+                if up_csv:
+                    st.session_state.batch_csv_file_path = save_uploaded_file(up_csv)
+                else:
+                    st.error("❗ No Products CSV found. Please upload the CSV again.")
+                    st.stop()
+
+            if "batch_json_file_path" not in st.session_state or not st.session_state.batch_json_file_path:
+                if up_json:
+                    st.session_state.batch_json_file_path = save_uploaded_file(up_json)
+                    
+            # JSON is optional; no stop here
             base_output = os.path.join(tempfile.gettempdir(), "outputs", "batch")
             os.makedirs(base_output, exist_ok=True)
 
