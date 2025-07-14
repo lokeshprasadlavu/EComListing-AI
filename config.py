@@ -30,8 +30,6 @@ class AppConfig:
     drive_folder_id: str
     oauth: Optional[OAuthConfig]
     service_account: Optional[ServiceAccountConfig]
-    logo_path: str
-    fonts_zip_path: str
 
 def load_config() -> AppConfig:
     secrets = st.secrets  # reads .streamlit/secrets.toml
