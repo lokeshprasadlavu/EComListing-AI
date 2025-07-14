@@ -101,7 +101,7 @@ def build_service_config(output_dir, csv_path='', json_path=''):
 
 def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
     work_dir = os.path.join(cfg.output_base_folder, slug)
-    
+
     video_path = os.path.join(work_dir, f"{slug}.mp4")
     blog_path = os.path.join(work_dir, f"{slug}_blog.txt")
     title_path = os.path.join(work_dir, f"{slug}_title.txt")
@@ -109,17 +109,18 @@ def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=
     # Check if all expected outputs exist
     if all(os.path.exists(p) for p in [video_path, blog_path, title_path]):
         log.info(f"✅ Loaded from cache: {slug}")
-        return type('Result', (), {
+        result = type('Result', (), {
             'video_path': video_path,
             'blog_file': blog_path,
             'title_file': title_path
         })()
+        return result, True  # cache_hit = True
 
     # Log which files are missing
     missing = [p for p in [video_path, blog_path, title_path] if not os.path.exists(p)]
     log.info(f"🔄 Cache miss for {slug}. Missing: {', '.join(os.path.basename(f) for f in missing)}")
-    
-    return generate_video(
+
+    result = generate_video(
         cfg=cfg,
         title=title,
         description=description,
@@ -127,6 +128,8 @@ def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=
         listing_id=listing_id,
         product_id=product_id,
     )
+    return result, False  # cache_hit = False
+
 
 
 def display_generated_output(result):
@@ -220,7 +223,7 @@ if mode == "Single Product":
             svc_cfg = build_service_config(output_dir)
 
             try:
-                result = generate_video_cached(
+                result, cache_hit = generate_video_cached(
                     cfg=svc_cfg,
                     title=title,
                     description=description,
@@ -233,7 +236,8 @@ if mode == "Single Product":
                 st.session_state.last_single_result = result
                 st.subheader("Generated Output")
                 display_generated_output(result)
-                upload_and_cleanup(os.path.join(upload_cache_root, slug), [result.video_path, result.blog_file, result.title_file], outputs_id)
+                if not cache_hit:
+                    upload_and_cleanup(os.path.join(upload_cache_root, slug), [result.video_path, result.blog_file, result.title_file], outputs_id)
             except GenerationError:
                 st.error("⚠️ Generation failed. Please refresh and try again. If the issue persists, contact support.")
 
@@ -330,7 +334,7 @@ else:
                         continue
 
                     try:
-                        result = generate_video_cached(
+                        result, cache_hit = generate_video_cached(
                             cfg=svc_cfg,
                             title=title,
                             description=desc,
@@ -349,6 +353,7 @@ else:
                         continue
                     st.subheader(f"Generating for {sub}")
                     display_generated_output(result)
-                    upload_and_cleanup(os.path.join(upload_cache_root, sub), [result.video_path, result.blog_file, result.title_file], outputs_id)
+                    if not cache_hit:
+                        upload_and_cleanup(os.path.join(upload_cache_root, sub), [result.video_path, result.blog_file, result.title_file], outputs_id)
             except Exception:
                 st.error("⚠️ Batch generation failed due to a technical issue. Please refresh and try again. If the issue persists, contact support.")
