@@ -65,15 +65,9 @@ def load_config() -> AppConfig:
             client_x509_cert_url          = sa["client_x509_cert_url"],
         )
 
-    # static asset paths can also live in secrets or env
-    logo_path     = secrets.get("LOGO_PATH", "updated_logo.png")
-    fonts_zip     = secrets.get("FONTS_ZIP_PATH", "Poppins.zip")
-
     return AppConfig(
         openai_api_key  = openai_api_key,
         drive_folder_id = drive_folder_id,
         oauth           = oauth_cfg,
-        service_account = sa_cfg,
-        logo_path       = logo_path,
-        fonts_zip_path  = fonts_zip,
+        service_account = sa_cfg
     )
