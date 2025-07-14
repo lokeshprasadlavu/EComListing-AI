@@ -32,7 +32,17 @@ def get_persistent_cache_dir(subdir: str):
     os.makedirs(cache_dir, exist_ok=True)
     return cache_dir
 
+def clear_all_caches():
+    """
+    Clears the entire ecomlisting_cache directory in the system temp folder.
+    Use this before any session starts or on forced refresh.
+    """
+    root = os.path.join(tempfile.gettempdir(), "ecomlisting_cache")
+    if os.path.exists(root):
+        shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(root, exist_ok=True)
 
+    
 # ─── Downloads ───
 def download_images(image_urls: List[str], target_dir: str) -> List[str]:
     ensure_dir(target_dir)
