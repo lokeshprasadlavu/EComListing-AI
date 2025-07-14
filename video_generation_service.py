@@ -63,11 +63,14 @@ def generate_video(
 
     local_images = download_images(image_urls, workdir)
     if not local_images:
+        log.error(f"No images downloaded for {base}. URLs: {image_urls}")
         raise GenerationError("❌ No images downloaded – check your URLs.")
 
     transcript = generate_transcript(title, description)
     if not transcript:
-        raise GenerationError("❌ Transcript generation failed.")
+        log.error(f"Transcript generation failed for {base}. Empty transcript.")
+        raise GenerationError("❌ Generation failed.")
+    
 
     font_path = os.path.join(cfg.fonts_zip_path, "Poppins-Light.ttf")
     bold_font_path = os.path.join(cfg.fonts_zip_path, "Poppins-Bold.ttf")
@@ -78,6 +81,7 @@ def generate_video(
         font = ImageFont.truetype(font_path, 35)
         bold_font = ImageFont.truetype(bold_font_path, 38)
     except Exception as e:
+        log.exception("Failed to load fonts")
         raise GenerationError(f"Failed to load font: {e}")
 
     slides = split_text_into_slides(transcript, font, 600, 3)
@@ -168,6 +172,7 @@ def generate_transcript(title: str, description: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
+        log.exception(f"Transcript generation failed: {e}")
         raise GenerationError(f"⚠️ Transcript generation failed: {e}")
 
 
@@ -199,4 +204,5 @@ def create_audio_with_gtts(text, output_path):
         tts = gTTS(text=text, lang='en')
         tts.save(output_path)
     except Exception as e:
+        log.exception(f"GTTS audio generation failed: {e}")
         raise GenerationError(f"⚠️ Failed to generate audio: {e}")
