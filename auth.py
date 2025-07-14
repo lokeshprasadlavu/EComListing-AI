@@ -1,4 +1,3 @@
-# auth.py
 import os
 import openai
 from google.oauth2 import service_account
