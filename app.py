@@ -16,7 +16,7 @@ from streamlit.runtime.runtime import Runtime
 from config import load_config
 from auth import get_openai_client, init_drive_service
 import drive_db
-from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
+from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, clear_all_caches
 from video_generation_service import generate_video, ServiceConfig, GenerationError
 
 import logging
@@ -27,6 +27,12 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 try:
+    # Clear all persistent caches
+    if "cleared_cache" not in st.session_state:
+        clear_all_caches()
+        st.session_state["cleared_cache"] = True
+        log.info("🧹 Cleared all persistent caches on app load.")
+
     # Persistent Upload Cache
     upload_cache_root = "upload_cache"
     shutil.rmtree(upload_cache_root, ignore_errors=True)
@@ -61,6 +67,7 @@ try:
         last_touch = st.session_state.get("last_interaction", now)
 
         if now - last_touch > INACTIVITY_TIMEOUT_SECONDS:
+            clear_all_caches()
             st.session_state.clear()
 
             # Inject JS to reload the page
