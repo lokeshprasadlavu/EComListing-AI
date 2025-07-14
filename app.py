@@ -19,6 +19,12 @@ import drive_db
 from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive
 from video_generation_service import generate_video, ServiceConfig, GenerationError
 
+import logging
+
+# ─── Logger Setup ───
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
 # Persistent Upload Cache
 upload_cache_root = "upload_cache"
 shutil.rmtree(upload_cache_root, ignore_errors=True)
@@ -92,6 +98,36 @@ def build_service_config(output_dir, csv_path='', json_path=''):
         logo_path=logo_path,
         output_base_folder=output_dir,
     )
+
+def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
+    work_dir = os.path.join(cfg.output_base_folder, slug)
+    
+    video_path = os.path.join(work_dir, f"{slug}.mp4")
+    blog_path = os.path.join(work_dir, f"{slug}_blog.txt")
+    title_path = os.path.join(work_dir, f"{slug}_title.txt")
+
+    # Check if all expected outputs exist
+    if all(os.path.exists(p) for p in [video_path, blog_path, title_path]):
+        log.info(f"✅ Loaded from cache: {slug}")
+        return type('Result', (), {
+            'video_path': video_path,
+            'blog_file': blog_path,
+            'title_file': title_path
+        })()
+
+    # Log which files are missing
+    missing = [p for p in [video_path, blog_path, title_path] if not os.path.exists(p)]
+    log.info(f"🔄 Cache miss for {slug}. Missing: {', '.join(os.path.basename(f) for f in missing)}")
+    
+    return generate_video(
+        cfg=cfg,
+        title=title,
+        description=description,
+        image_urls=image_urls,
+        listing_id=listing_id,
+        product_id=product_id,
+    )
+
 
 def display_generated_output(result):
     if st.session_state.output_options in ("Video only", "Video + Blog"):
@@ -180,7 +216,7 @@ if mode == "Single Product":
                 if uploaded_images:
                     st.session_state.uploaded_image_paths = prepare_image_paths(uploaded_images)
                 else:
-                    st.error("❗ No uploaded images found. Please upload image(s) again.")
+                    st.error("❗ No uploaded images found. Please refresh and upload image(s) again.")
                     st.stop()
 
             slug = slugify(title)
@@ -192,24 +228,22 @@ if mode == "Single Product":
             svc_cfg = build_service_config(output_dir)
 
             try:
-                result = generate_video(
+                result = generate_video_cached(
                     cfg=svc_cfg,
-                    listing_id=None,
-                    product_id=None,
                     title=title,
                     description=description,
                     image_urls=image_urls,
+                    slug=slug,
+                    listing_id=None,
+                    product_id=None
                 )
+
                 st.session_state.last_single_result = result
                 st.subheader("Generated Output")
                 display_generated_output(result)
                 upload_and_cleanup(os.path.join(upload_cache_root, slug), [result.video_path, result.blog_file, result.title_file], outputs_id)
-            except GenerationError as ge:
-                st.error(str(ge))
-                st.stop()
-            except Exception as e:
-                st.error(f"⚠️ Unexpected error: {e}")
-                st.stop()
+            except GenerationError:
+                st.error("⚠️ Generation failed. Please refresh and try again. If the issue persists, contact support.")
 
 # ✅ Batch Product Mode
 else:
@@ -274,13 +308,13 @@ else:
                 if up_csv:
                     st.session_state.batch_csv_file_path = save_uploaded_file(up_csv)
                 else:
-                    st.error("❗ No Products CSV found. Please upload the CSV again.")
+                    st.error("❗ No Products CSV found. Please refresh and upload the CSV again.")
                     st.stop()
 
             if "batch_json_file_path" not in st.session_state or not st.session_state.batch_json_file_path:
                 if up_json:
                     st.session_state.batch_json_file_path = save_uploaded_file(up_json)
-                    
+
             # JSON is optional; no stop here
             base_output = os.path.join(tempfile.gettempdir(), "outputs", "batch")
             os.makedirs(base_output, exist_ok=True)
@@ -292,42 +326,50 @@ else:
 
 
             images_data = st.session_state.batch_images_data
+            try:
+                MAX_FAILS = 3
+                for _, row in df.iterrows():
+                    lid, pid = str(row["Listing Id"]), str(row["Product Id"])
+                    sub = f"{lid}_{pid}"
+                    title, desc = str(row["Title"]), str(row["Description"])
+                    key = (int(lid), int(pid)) if lid.isdigit() and pid.isdigit() else (lid, pid)
 
-            for _, row in df.iterrows():
-                lid, pid = str(row["Listing Id"]), str(row["Product Id"])
-                title, desc = str(row["Title"]), str(row["Description"])
-                key = (int(lid), int(pid)) if lid.isdigit() and pid.isdigit() else (lid, pid)
+                    urls = []
+                    if images_data:
+                        for entry in images_data:
+                            if (entry["listingId"], entry["productId"]) == key:
+                                urls = [img["imageURL"] for img in entry["images"]]
+                                break
+                    else:
+                        urls = extract_image_urls_from_row(row, df.columns)
 
-                urls = []
-                if images_data:
-                    for entry in images_data:
-                        if (entry["listingId"], entry["productId"]) == key:
-                            urls = [img["imageURL"] for img in entry["images"]]
+                    if not urls:
+                        st.warning(f"⚠️ Skipping {lid}/{pid} – No valid image URLs")
+                        continue
+                    if not title or not desc:
+                        st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
+                        continue
+
+                    try:
+                        result = generate_video_cached(
+                            cfg=svc_cfg,
+                            title=title,
+                            description=desc,
+                            image_urls=urls,
+                            slug=sub,
+                            listing_id=lid,
+                            product_id=pid
+                        )
+                        consecutive_failures = 0
+                    except GenerationError as ge:
+                        st.warning(f"⚠️ Skipping {sub} – Generation failed.")
+                        log.warning(f"[{sub}] GenerationError: {ge}")
+                        consecutive_failures += 1
+                        if consecutive_failures >= MAX_FAILS:
                             break
-                else:
-                    urls = extract_image_urls_from_row(row, df.columns)
-
-                if not urls:
-                    st.warning(f"⚠️ Skipping {lid}/{pid} – No valid image URLs")
-                    continue
-                if not title or not desc:
-                    st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
-                    continue
-
-                try:
-                    result = generate_video(
-                        cfg=svc_cfg,
-                        listing_id=lid,
-                        product_id=pid,
-                        title=title,
-                        description=desc,
-                        image_urls=urls,
-                    )
-                except GenerationError as ge:
-                    st.warning(f"⚠️ Skipping {lid}/{pid} – {ge}")
-                    continue
-
-                sub = f"{lid}_{pid}"
-                st.subheader(f"Generating for {sub}")
-                display_generated_output(result)
-                upload_and_cleanup(os.path.join(upload_cache_root, sub), [result.video_path, result.blog_file, result.title_file], outputs_id)
+                        continue
+                    st.subheader(f"Generating for {sub}")
+                    display_generated_output(result)
+                    upload_and_cleanup(os.path.join(upload_cache_root, sub), [result.video_path, result.blog_file, result.title_file], outputs_id)
+            except Exception:
+                st.error("⚠️ Batch generation failed due to a technical issue. Please refresh and try again. If the issue persists, contact support.")
