@@ -15,4 +15,3 @@ pydub
 openai==0.28.0
 fastjsonschema
 streamlit-autorefresh
-nicegui
