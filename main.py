@@ -285,4 +285,4 @@ def main():
             ui.button("Run Batch", on_click=on_run_batch)
 
 
-ui.run(title="EComListing AI", native=True)
+ui.run(title="EComListing AI", native=False, host='0.0.0.0', port=8080)
