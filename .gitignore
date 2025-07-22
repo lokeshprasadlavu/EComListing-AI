@@ -6,3 +6,4 @@ instance/
 /tests/sample1.jpg
 frontend/.streamlit/secrets.toml
 client_secrets.json
+echo "frontend/.streamlit/secrets.toml" >> .gitignore
