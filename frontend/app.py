@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import uuid
 import hashlib
+import requests
 
 import streamlit as st
 import pandas as pd
@@ -13,11 +14,11 @@ import time
 from streamlit.runtime.scriptrunner import RerunException
 from streamlit.runtime.runtime import Runtime
 
-from config import load_config
-from auth import get_openai_client, init_drive_service
-import drive_db
-from utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, clear_all_caches
-from video_generation_service import generate_video, ServiceConfig, GenerationError
+from shared.config import load_config
+from shared.auth import get_openai_client, init_drive_service
+import shared.drive_db as drive_db
+from shared.utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, clear_all_caches
+from backend.video_generation_service import generate_video, ServiceConfig, GenerationError
 
 import logging
 import gc
@@ -37,6 +38,7 @@ try:
     upload_cache_root = "upload_cache"
     shutil.rmtree(upload_cache_root, ignore_errors=True)
     os.makedirs(upload_cache_root, exist_ok=True)
+    
 
     # Session Helpers
     def full_reset_session_state():
@@ -107,7 +109,9 @@ try:
             logo_path=logo_path,
             output_base_folder=output_dir,
         )
-
+    
+    BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
+    
     def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
         work_dir = os.path.join(cfg.output_base_folder, slug)
 
@@ -129,15 +133,44 @@ try:
         missing = [p for p in [video_path, blog_path, title_path] if not os.path.exists(p)]
         log.info(f"🔄 Cache miss for {slug}. Missing: {', '.join(os.path.basename(f) for f in missing)}")
 
-        result = generate_video(
-            cfg=cfg,
-            title=title,
-            description=description,
-            image_urls=image_urls,
-            listing_id=listing_id,
-            product_id=product_id,
-        )
-        return result, False  # cache_hit = False
+#### Direct call to function (before API integration)
+        # result = generate_video(
+        #     cfg=cfg,
+        #     title=title,
+        #     description=description,
+        #     image_urls=image_urls,
+        #     listing_id=listing_id,
+        #     product_id=product_id,
+        # )
+        # return result, False  # cache_hit = False
+        
+        payload = {
+        "csv_file": cfg.csv_file,
+        "images_json": cfg.images_json,
+        "audio_folder": cfg.audio_folder,
+        "fonts_zip_path": cfg.fonts_zip_path,
+        "logo_path": cfg.logo_path,
+        "output_base_folder": cfg.output_base_folder,
+        "listing_id": listing_id,
+        "product_id": product_id,
+        "title": title,
+        "description": description,
+        "image_urls": image_urls}
+
+        try:
+            res = requests.post(BACKEND_URL, json=payload)
+            res.raise_for_status()
+            data = res.json()
+
+            result = type('Result', (), {
+                'video_path': data["video_path"],
+                'blog_file': data["blog_file"],
+                'title_file': data["title_file"]
+            })()
+            return result, False
+        except requests.exceptions.RequestException as e:
+            log.exception("🚨 Backend API call failed")
+            raise GenerationError(f"Backend API call failed: {e}")
 
 
 

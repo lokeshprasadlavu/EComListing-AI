@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+moviepy==1.0.3
+imageio-ffmpeg
+ffmpeg-python
+openai==0.28.0
+pydub
+fastjsonschema
+
+# Shared db deps
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+boto3
+
+# Include shared module
+-e ../

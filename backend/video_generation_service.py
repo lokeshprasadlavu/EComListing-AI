@@ -14,7 +14,7 @@ from moviepy.editor import (
 )
 from gtts import gTTS
 
-from utils import (
+from shared.utils import (
     download_images,
     slugify,
     get_persistent_cache_dir

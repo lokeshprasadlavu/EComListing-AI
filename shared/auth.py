@@ -2,7 +2,7 @@ import os
 import openai
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from config import OAuthConfig, ServiceAccountConfig
+from shared.config import OAuthConfig, ServiceAccountConfig
 
 # OpenAI setup
 def get_openai_client(api_key: str):

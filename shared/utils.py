@@ -2,7 +2,7 @@ import logging as log
 import os
 import re
 import glob
-import drive_db
+import shared.drive_db as drive_db
 import shutil
 import tempfile
 import zipfile
@@ -12,7 +12,7 @@ import requests
 import fastjsonschema
 from fastjsonschema import JsonSchemaException
 
-from drive_db import list_files, download_file
+from shared.drive_db import list_files, download_file
 
 # ─── File System Utilities ───
 def ensure_dir(path: str):

@@ -1,0 +1,16 @@
+streamlit>=1.20
+streamlit-autorefresh
+requests
+pillow
+gtts
+pytest
+pyngrok
+
+# Shared db deps
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+boto3
+
+# Include shared module
+-e ../
