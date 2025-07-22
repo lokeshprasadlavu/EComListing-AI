@@ -4,5 +4,5 @@ __pycache__/
 instance/
 *.log
 /tests/sample1.jpg
-.streamlit/secrets.toml
+frontend/.streamlit/secrets.toml
 client_secrets.json
