@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 
-from video_generation_service import generate_video, ServiceConfig, GenerationError
+from backend.video_generation_service import generate_video, ServiceConfig, GenerationError
 
 app = FastAPI()
 
