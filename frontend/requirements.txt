@@ -5,6 +5,7 @@ pillow
 gtts
 pytest
 pyngrok
+openai
 
 # Shared db deps
 google-api-python-client
