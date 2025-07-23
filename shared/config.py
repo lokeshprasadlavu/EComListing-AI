@@ -2,8 +2,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-import streamlit as st
-
 @dataclass
 class OAuthConfig:
     client_id: str
@@ -31,8 +29,7 @@ class AppConfig:
     oauth: Optional[OAuthConfig]
     service_account: Optional[ServiceAccountConfig]
 
-def load_config() -> AppConfig:
-    secrets = st.secrets  # reads .streamlit/secrets.toml
+def load_config(secrets) -> AppConfig:
 
     openai_api_key  = secrets["OPENAI_API_KEY"]
     drive_folder_id = secrets["DRIVE_FOLDER_ID"]

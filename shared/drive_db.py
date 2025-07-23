@@ -2,7 +2,6 @@
 import io
 import time
 import functools
-import streamlit as st
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 # -------------------------------------------------------------------------

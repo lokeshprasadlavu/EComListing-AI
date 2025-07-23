@@ -202,8 +202,9 @@ try:
     handle_inactivity() 
     st.title("EComListing AI")
     st.markdown("🚀 AI-Powered Multimedia Content for your eCommerce Listings.")
-
-    cfg = load_config()
+    
+    secrets = st.secrets
+    cfg = load_config(secrets)
     openai = get_openai_client(cfg.openai_api_key)
 
     with st.spinner("🔄 Connecting to Drive…"):
