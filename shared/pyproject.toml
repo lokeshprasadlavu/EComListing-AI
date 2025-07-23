@@ -1,7 +1,7 @@
 # pyproject.toml (in the root of the repo)
 [project]
-name = "EComListing-AI"
+name = "shared"
 version = "0.1.0"
 
 [tool.setuptools.packages.find]
-where = ["shared"]
+where = ["."]
