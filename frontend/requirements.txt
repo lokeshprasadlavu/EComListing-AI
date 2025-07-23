@@ -13,4 +13,4 @@ google-auth-httplib2
 boto3
 
 # Include shared module
--e ../shared/
+-e ./shared/
