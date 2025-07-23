@@ -4,6 +4,10 @@ from typing import List, Optional
 
 from backend.video_generation_service import generate_video, ServiceConfig, GenerationError
 
+import os
+import sys  
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 app = FastAPI()
 
 # Input schema for API request

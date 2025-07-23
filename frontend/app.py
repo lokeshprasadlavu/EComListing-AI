@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import re
 import shutil
@@ -22,6 +23,8 @@ from backend.video_generation_service import generate_video, ServiceConfig, Gene
 
 import logging
 import gc
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
