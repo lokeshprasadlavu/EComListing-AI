@@ -15,6 +15,7 @@ import time
 from streamlit.runtime.scriptrunner import RerunException
 from streamlit.runtime.runtime import Runtime
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.config import load_config
 from shared.auth import get_openai_client, init_drive_service
 import shared.drive_db as drive_db
@@ -23,8 +24,6 @@ from backend.video_generation_service import generate_video, ServiceConfig, Gene
 
 import logging
 import gc
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
