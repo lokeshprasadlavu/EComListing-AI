@@ -1,11 +1,10 @@
 streamlit>=1.20
 streamlit-autorefresh
 requests
-pillow
-gtts
 pytest
 pyngrok
 openai
+fastjsonschema
 
 # Shared db deps
 google-api-python-client
