@@ -20,7 +20,7 @@ from shared.config import load_config
 from shared.auth import get_openai_client, init_drive_service
 import shared.drive_db as drive_db
 from shared.utils import slugify, validate_images_json, preload_fonts_from_drive, preload_logo_from_drive, upload_output_files_to_drive, clear_all_caches
-from backend.video_generation_service import generate_video, ServiceConfig, GenerationError
+
 
 import logging
 import gc
@@ -40,7 +40,6 @@ try:
     upload_cache_root = "upload_cache"
     shutil.rmtree(upload_cache_root, ignore_errors=True)
     os.makedirs(upload_cache_root, exist_ok=True)
-    
 
     # Session Helpers
     def full_reset_session_state():
@@ -103,6 +102,15 @@ try:
         return saved_paths
 
     def build_service_config(output_dir, csv_path='', json_path=''):
+        class ServiceConfig:
+            def __init__(self, csv_file, images_json, audio_folder, fonts_zip_path, logo_path, output_base_folder):
+                self.csv_file = csv_file
+                self.images_json = images_json
+                self.audio_folder = audio_folder
+                self.fonts_zip_path = fonts_zip_path
+                self.logo_path = logo_path
+                self.output_base_folder = output_base_folder
+    
         return ServiceConfig(
             csv_file=csv_path,
             images_json=json_path,
@@ -232,6 +240,9 @@ try:
     if st.session_state.last_mode != mode:
         full_reset_session_state()
         st.session_state.last_mode = mode
+
+    class GenerationError(Exception):
+        pass
 
     # Single Product Mode
     if mode == "Single Product":
