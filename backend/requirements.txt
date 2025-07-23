@@ -5,6 +5,7 @@ imageio-ffmpeg
 ffmpeg-python
 openai==0.28.0
 pydub
+gtts
 fastjsonschema
 
 # Shared db deps
