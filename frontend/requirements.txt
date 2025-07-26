@@ -3,7 +3,6 @@ streamlit-autorefresh
 requests
 pytest
 pyngrok
-openai
 fastjsonschema
 psutil
 
