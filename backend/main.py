@@ -40,7 +40,7 @@ def generate_endpoint(payload: GenerateRequest):
             audio_folder=payload.audio_folder,
             fonts_zip_path=payload.fonts_zip_path,
             logo_path=payload.logo_path,
-            output_base_folder=payload.output_base_folder
+            output_base_folder=payload.output_base_folder,
             openai_api_key=payload.openai_api_key
         )
 
