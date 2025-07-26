@@ -401,9 +401,9 @@ try:
                         # Memory cleanup
                         del data
                         gc.collect()
-                except Exception:
+                except Exception as e:
                     st.error("⚠️ Batch generation failed due to a technical issue. Please refresh and try again. If the issue persists, contact support.")
-                
+                    log.exception(f"Batch generation failed: {e}")
 except Exception:
     st.error("⚠️ An unexpected error occurred. Please refresh the page or contact support if the issue persists.")
     log.exception("An unexpected error occurred in the main app loop.")
