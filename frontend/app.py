@@ -347,7 +347,7 @@ try:
                 df.columns = [c.strip() for c in df.columns]
 
 
-                images_data = st.session_state.batch_json_file_path
+                images_data = st.session_state.batch_images_data
                 try:
                     MAX_FAILS = 3
                     for _, row in df.iterrows():
