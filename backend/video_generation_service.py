@@ -165,7 +165,7 @@ def generate_transcript(title: str, description: str) -> str:
         f"Do not format as a video script or include voiceover-style text. Write as a typical blog article."
     )
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=500
