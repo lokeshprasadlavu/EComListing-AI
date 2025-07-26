@@ -147,18 +147,19 @@ try:
         # return result, False  # cache_hit = False
         
         payload = {
-        "csv_file": cfg.csv_file,
-        "images_json": cfg.images_json,
-        "audio_folder": cfg.audio_folder,
-        "fonts_zip_path": cfg.fonts_zip_path,
-        "logo_path": cfg.logo_path,
-        "output_base_folder": cfg.output_base_folder,
-        "openai_api_key": cfg.openai_api_key,
-        "listing_id": listing_id,
-        "product_id": product_id,
-        "title": title,
-        "description": description,
-        "image_urls": image_urls}
+            "csv_file": cfg.csv_file,
+            "images_json": cfg.images_json,
+            "audio_folder": cfg.audio_folder,
+            "fonts_zip_path": cfg.fonts_zip_path,
+            "logo_path": cfg.logo_path,
+            "output_base_folder": cfg.output_base_folder,
+            "openai_api_key": cfg.openai_api_key,
+            "listing_id": listing_id,
+            "product_id": product_id,
+            "title": title,
+            "description": description,
+            "image_urls": image_urls
+        }
 
         try:
             res = requests.post(BACKEND_URL, json=payload)
