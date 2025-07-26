@@ -38,8 +38,9 @@ try:
 
     # Session Helpers
     def full_reset_session_state():
+        preserved_keys = {"cleared_cache"}
         for key in list(st.session_state.keys()):
-            if not key.startswith("_"):
+            if key not in preserved_keys and not key.startswith("_"):
                 del st.session_state[key]
 
     def detect_and_reset_on_input_change(context_id, input_parts):
