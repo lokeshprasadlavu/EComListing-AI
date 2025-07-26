@@ -12,8 +12,6 @@ app = FastAPI()
 
 # Input schema for API request
 class GenerateRequest(BaseModel):
-    csv_file: str
-    images_json: str
     audio_folder: str
     fonts_zip_path: str
     logo_path: str
@@ -35,8 +33,6 @@ class GenerateResponse(BaseModel):
 def generate_endpoint(payload: GenerateRequest):
     try:
         cfg = ServiceConfig(
-            csv_file=payload.csv_file,
-            images_json=payload.images_json,
             audio_folder=payload.audio_folder,
             fonts_zip_path=payload.fonts_zip_path,
             logo_path=payload.logo_path,

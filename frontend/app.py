@@ -130,7 +130,7 @@ try:
 
     BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
     
-    def generate_video(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
+    def generate_video(title, description, image_urls, slug, listing_id=None, product_id=None):
         work_dir = os.path.join(cfg.output_base_folder, slug)
         video_path = os.path.join(work_dir, f"{slug}.mp4")
         blog_path = os.path.join(work_dir, f"{slug}_blog.txt")
@@ -146,8 +146,6 @@ try:
         log.info(f"🔄 Cache miss for {slug}. Missing: {', '.join(os.path.basename(f) for f in missing)}")
         
         payload = {
-            "csv_file": cfg.csv_file,
-            "images_json": cfg.images_json,
             "audio_folder": cfg.audio_folder,
             "fonts_zip_path": cfg.fonts_zip_path,
             "logo_path": cfg.logo_path,

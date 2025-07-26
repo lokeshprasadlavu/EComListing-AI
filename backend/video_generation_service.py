@@ -27,8 +27,6 @@ log = logging.getLogger(__name__)
 # ─── Data Classes ───
 @dataclass
 class ServiceConfig:
-    csv_file: str
-    images_json: str
     audio_folder: str
     fonts_zip_path: str
     logo_path: str
