@@ -118,27 +118,6 @@ try:
                 st.stop()
         return saved_paths
 
-    def build_service_config(output_dir, csv_path='', json_path=''):
-        class ServiceConfig:
-            def __init__(self, csv_file, images_json, audio_folder, fonts_zip_path, logo_path, output_base_folder, openai_api_key):
-                self.csv_file = csv_file
-                self.images_json = images_json
-                self.audio_folder = audio_folder
-                self.fonts_zip_path = fonts_zip_path
-                self.logo_path = logo_path
-                self.output_base_folder = output_base_folder
-                self.openai_api_key = openai_api_key
-    
-        return ServiceConfig(
-            csv_file=csv_path,
-            images_json=json_path,
-            audio_folder=output_dir,
-            fonts_zip_path=fonts_folder,
-            logo_path=logo_path,
-            output_base_folder=output_dir,
-            openai_api_key=cfg.openai_api_key 
-        )
-    
     BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
     
     def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
