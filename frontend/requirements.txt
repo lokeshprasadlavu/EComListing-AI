@@ -5,6 +5,7 @@ pytest
 pyngrok
 openai
 fastjsonschema
+psutil
 
 # Shared db deps
 google-api-python-client
