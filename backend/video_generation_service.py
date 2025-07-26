@@ -33,6 +33,7 @@ class ServiceConfig:
     fonts_zip_path: str
     logo_path: str
     output_base_folder: str
+    openai_api_key: str
 
 @dataclass
 class GenerationResult:
@@ -54,7 +55,8 @@ def generate_video(
 ) -> GenerationResult:
     base = f"{listing_id}_{product_id}" if listing_id and product_id and listing_id != product_id else slugify(title)
     log.info(f"🎬 Generating content for: {base}")
-
+    
+    os.environ["OPENAI_API_KEY"] = cfg.openai_api_key
     persistent_dir = get_persistent_cache_dir(base)
     audio_folder = os.path.join(persistent_dir, "audio")
     os.makedirs(audio_folder, exist_ok=True)

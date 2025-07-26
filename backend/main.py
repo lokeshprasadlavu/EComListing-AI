@@ -18,7 +18,7 @@ class GenerateRequest(BaseModel):
     fonts_zip_path: str
     logo_path: str
     output_base_folder: str
-
+    openai_api_key: str
     listing_id: Optional[str]
     product_id: Optional[str]
     title: str
@@ -41,6 +41,7 @@ def generate_endpoint(payload: GenerateRequest):
             fonts_zip_path=payload.fonts_zip_path,
             logo_path=payload.logo_path,
             output_base_folder=payload.output_base_folder
+            openai_api_key=payload.openai_api_key
         )
 
         result = generate_video(

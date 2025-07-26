@@ -1,14 +1,6 @@
-import os
-import openai
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from shared.config import OAuthConfig, ServiceAccountConfig
-
-# OpenAI setup
-def get_openai_client(api_key: str):
-    os.environ["OPENAI_API_KEY"] = api_key
-    openai.api_key = api_key
-    return openai
 
 # Drive setup
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]

@@ -120,13 +120,14 @@ try:
 
     def build_service_config(output_dir, csv_path='', json_path=''):
         class ServiceConfig:
-            def __init__(self, csv_file, images_json, audio_folder, fonts_zip_path, logo_path, output_base_folder):
+            def __init__(self, csv_file, images_json, audio_folder, fonts_zip_path, logo_path, output_base_folder, openai_api_key):
                 self.csv_file = csv_file
                 self.images_json = images_json
                 self.audio_folder = audio_folder
                 self.fonts_zip_path = fonts_zip_path
                 self.logo_path = logo_path
                 self.output_base_folder = output_base_folder
+                self.openai_api_key = openai_api_key
     
         return ServiceConfig(
             csv_file=csv_path,
@@ -135,6 +136,7 @@ try:
             fonts_zip_path=fonts_folder,
             logo_path=logo_path,
             output_base_folder=output_dir,
+            openai_api_key=cfg.openai_api_key 
         )
     
     BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
@@ -178,6 +180,7 @@ try:
         "fonts_zip_path": cfg.fonts_zip_path,
         "logo_path": cfg.logo_path,
         "output_base_folder": cfg.output_base_folder,
+        "openai_api_key": cfg.openai_api_key,
         "listing_id": listing_id,
         "product_id": product_id,
         "title": title,
@@ -232,7 +235,6 @@ try:
     
     secrets = st.secrets
     cfg = load_config(secrets)
-    openai = get_openai_client(cfg.openai_api_key)
 
     with st.spinner("🔄 Connecting to Drive…"):
         try:
