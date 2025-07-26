@@ -38,18 +38,11 @@ try:
 
     # Session Helpers
     def full_reset_session_state():
-        keys_to_clear = [
-            "output_options", "show_output_radio_single", "show_output_radio_batch",
-            "last_single_result", "last_batch_folder", "uploaded_image_paths",
-            "batch_csv_path", "batch_json_path", "batch_images_data",
-            "batch_csv_file_path", "batch_json_file_path", "input_signature",
-            "previous_input_hash", "previous_input_hash_single", "previous_input_hash_batch",
-            "title", "description"
-        ]
-        for key in keys_to_clear:
-            st.session_state.pop(key, None)
+        for key in list(st.session_state.keys()):
+            if not key.startswith("_"):
+                del st.session_state[key]
 
-    def detect_and_reset_on_input_change(context_id: str, input_parts: list):
+    def detect_and_reset_on_input_change(context_id, input_parts):
         combined = ''.join(sorted(input_parts))
         input_hash = hashlib.md5(combined.encode()).hexdigest()
         hash_key = f"previous_input_hash_{context_id}"
@@ -114,9 +107,8 @@ try:
 
     BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
     
-    def generate_video_cached(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
+    def generate_video(cfg, title, description, image_urls, slug, listing_id=None, product_id=None):
         work_dir = os.path.join(cfg.output_base_folder, slug)
-
         video_path = os.path.join(work_dir, f"{slug}.mp4")
         blog_path = os.path.join(work_dir, f"{slug}_blog.txt")
         title_path = os.path.join(work_dir, f"{slug}_title.txt")
@@ -124,27 +116,11 @@ try:
         # Check if all expected outputs exist
         if all(os.path.exists(p) for p in [video_path, blog_path, title_path]):
             log.info(f"✅ Loaded from cache: {slug}")
-            result = type('Result', (), {
-                'video_path': video_path,
-                'blog_file': blog_path,
-                'title_file': title_path
-            })()
-            return result, True  # cache_hit = True
+            return data, True  # cache_hit = True
 
         # Log which files are missing
         missing = [p for p in [video_path, blog_path, title_path] if not os.path.exists(p)]
         log.info(f"🔄 Cache miss for {slug}. Missing: {', '.join(os.path.basename(f) for f in missing)}")
-
-#### Direct call to function (before API integration)
-        # result = generate_video(
-        #     cfg=cfg,
-        #     title=title,
-        #     description=description,
-        #     image_urls=image_urls,
-        #     listing_id=listing_id,
-        #     product_id=product_id,
-        # )
-        # return result, False  # cache_hit = False
         
         payload = {
             "csv_file": cfg.csv_file,
@@ -159,38 +135,32 @@ try:
             "title": title,
             "description": description,
             "image_urls": image_urls
-        }
+            }
 
         try:
             res = requests.post(BACKEND_URL, json=payload)
             res.raise_for_status()
             data = res.json()
-
-            result = type('Result', (), {
-                'video_path': data["video_path"],
-                'blog_file': data["blog_file"],
-                'title_file': data["title_file"]
-            })()
-            return result, False
+            return data, False
         except requests.exceptions.RequestException as e:
             log.exception("🚨 Backend API call failed")
             raise GenerationError(f"Request failed: {e}")
 
 
 
-    def display_generated_output(result):
+    def display_output(data):
         if st.session_state.output_options in ("Video only", "Video + Blog"):
-            st.video(result.video_path)
+            st.video(data["video_path"])
         if st.session_state.output_options in ("Blog only", "Video + Blog"):
             st.markdown("**Blog Content**")
-            st.write(open(result.blog_file, 'r').read())
+            st.write(open(data["blog_file"], 'r').read())
 
-    def upload_and_cleanup(local_folder, files, drive_folder_id):
-        os.makedirs(local_folder, exist_ok=True)
+    def upload_results(folder, files, drive_id):
+        os.makedirs(folder, exist_ok=True)
         for f in files:
-            shutil.copy(f, os.path.join(local_folder, os.path.basename(f)))
-        upload_output_files_to_drive(subdir=local_folder, parent_id=drive_folder_id)
-        shutil.rmtree(local_folder, ignore_errors=True)
+            shutil.copy(f, os.path.join(folder, os.path.basename(f)))
+        upload_output_files_to_drive(subdir=folder, parent_id=drive_id)
+        shutil.rmtree(folder, ignore_errors=True)
 
     def extract_image_urls_from_row(row, df_columns):
         col_map = {c.lower(): c for c in df_columns}
@@ -244,10 +214,9 @@ try:
         title = st.text_input("Product Title", st.session_state.get("title", ""))
         description = st.text_area("Product Description", height=150, value=st.session_state.get("description", ""))
         uploaded_images = st.file_uploader("Upload Product Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-
         detect_and_reset_on_input_change("single", [title, description] + [f.name for f in uploaded_images or []])
 
-        if st.button("Generate") and uploaded_images is not None:
+        if st.button("Generate"):
             if not title.strip() or not description.strip():
                 st.error("❗ Please enter both title and description.")
                 st.stop()
@@ -264,19 +233,14 @@ try:
 
         if st.session_state.get("show_output_radio_single"):
             st.session_state.output_options = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
-
             if st.button("Continue", key="continue_single"):
                 slug = slugify(title)
                 output_dir = os.path.join(tempfile.gettempdir(), "outputs", slug)
                 os.makedirs(output_dir, exist_ok=True)
-
                 image_urls = st.session_state.uploaded_image_paths
 
-                svc_cfg = build_service_config(output_dir)
-
                 try:
-                    result, cache_hit = generate_video_cached(
-                        cfg=svc_cfg,
+                    data, cache_hit = generate_video(
                         title=title,
                         description=description,
                         image_urls=image_urls,
@@ -285,11 +249,11 @@ try:
                         product_id=None
                     )
 
-                    st.session_state.last_single_result = result
+                    st.session_state.last_single_result = data
                     st.subheader("Generated Output")
-                    display_generated_output(result)
+                    display_output(data)
                     if not cache_hit:
-                        upload_and_cleanup(os.path.join(upload_cache_root, slug), [result.video_path, result.blog_file, result.title_file], outputs_id)
+                        upload_results(os.path.join(upload_cache_root, slug), [data["video_path"], data["blog_file"], data["title_file"]], outputs_id)
                 except GenerationError:
                     st.error("⚠️ Generation failed. Please refresh and try again. If the issue persists, contact support.")
 
@@ -306,11 +270,10 @@ try:
 
         if up_csv:
             st.session_state.batch_csv_file_path = save_uploaded_file(up_csv)
-
         if up_json:
             st.session_state.batch_json_file_path = save_uploaded_file(up_json)
 
-        if st.button("Run Batch") and up_csv is not None:
+        if st.button("Run Batch"):
             if not st.session_state.get("batch_csv_file_path"):
                 st.error("❗ Please upload a valid Products CSV.")
                 st.stop()
@@ -357,13 +320,11 @@ try:
                 base_output = os.path.join(tempfile.gettempdir(), "outputs", "batch")
                 os.makedirs(base_output, exist_ok=True)
 
-                svc_cfg = build_service_config(base_output, csv_path=st.session_state.batch_csv_path, json_path=st.session_state.batch_json_path)
-
-                df = pd.read_csv(svc_cfg.csv_file, low_memory=False)
+                df = pd.read_csv(st.session_state.batch_csv_file_path, low_memory=False)
                 df.columns = [c.strip() for c in df.columns]
 
 
-                images_data = st.session_state.batch_images_data
+                images_data = st.session_state.batch_json_file_path
                 try:
                     MAX_FAILS = 3
                     for _, row in df.iterrows():
@@ -394,8 +355,7 @@ try:
                             continue
 
                         try:
-                            result, cache_hit = generate_video_cached(
-                                cfg=svc_cfg,
+                            data, cache_hit = generate_video(
                                 title=title,
                                 description=desc,
                                 image_urls=urls,
@@ -412,11 +372,11 @@ try:
                                 break
                             continue
                         st.subheader(f"Generated for {sub}")
-                        display_generated_output(result)
+                        display_output(data)
                         if not cache_hit:
-                            upload_and_cleanup(os.path.join(upload_cache_root, sub), [result.video_path, result.blog_file, result.title_file], outputs_id)
+                            upload_results(os.path.join(upload_cache_root, sub), [data["video_path"], data["blog_file"], data["title_file"]], outputs_id)
                         # Memory cleanup
-                        del result
+                        del data
                         gc.collect()
                 except Exception:
                     st.error("⚠️ Batch generation failed due to a technical issue. Please refresh and try again. If the issue persists, contact support.")
