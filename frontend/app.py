@@ -24,6 +24,7 @@ from shared.utils import slugify, validate_images_json, preload_fonts_from_drive
 
 import logging
 import gc
+import psutil
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
@@ -82,13 +83,24 @@ try:
 
         st.session_state["last_interaction"] = now
 
+    def monitor_memory():
+        mem = psutil.virtual_memory()
+        log.info(f"🔍 Memory used: {mem.percent}% of {mem.total >> 20} MB")
+        if mem.percent > 85:
+            log.warning("⚠️ Memory critically high. Skipping item to prevent crash.")
+            raise MemoryError("High memory usage detected")
 
     # File & Output Helpers
     def save_uploaded_file(uploaded_file):
         path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex}_{uploaded_file.name}")
-        with open(path, "wb") as f:
-            f.write(uploaded_file.getvalue())
-        return path
+        try: 
+            with open(path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+            return path
+        except Exception as e:
+            log.error(f"Failed saving uploaded file: {e}")
+            st.error("⚠️ File saving failed. Please re-upload.")
+            st.stop()
 
     def prepare_image_paths(uploaded_images):
         saved_paths = []
@@ -96,9 +108,14 @@ try:
             ext = os.path.splitext(img.name)[1]
             filename = f"{uuid.uuid4().hex}{ext}"
             path = os.path.join(tempfile.gettempdir(), filename)
-            with open(path, "wb") as f:
-                f.write(img.getvalue())
-            saved_paths.append(path)
+            try:
+                with open(path, "wb") as f:
+                    f.write(img.getvalue())
+                saved_paths.append(path)
+            except Exception as e:
+                log.error(f"Failed saving image: {e}")
+                st.error(f"⚠️ Failed saving image. Please re-upload.")
+                st.stop()
         return saved_paths
 
     def build_service_config(output_dir, csv_path='', json_path=''):
@@ -180,7 +197,7 @@ try:
             return result, False
         except requests.exceptions.RequestException as e:
             log.exception("🚨 Backend API call failed")
-            raise GenerationError(f"Backend API call failed: {e}")
+            raise GenerationError(f"Request failed: {e}")
 
 
 
@@ -254,15 +271,18 @@ try:
 
         detect_and_reset_on_input_change("single", [title, description] + [f.name for f in uploaded_images or []])
 
-        if st.button("Generate"):
+        if st.button("Generate") and uploaded_images is not None:
             if not title.strip() or not description.strip():
                 st.error("❗ Please enter both title and description.")
                 st.stop()
             if not uploaded_images:
                 st.error("❗ Please upload at least one image.")
                 st.stop()
-
+            if not uploaded_images or any(f is None for f in uploaded_images):
+                st.warning("⏳ Please wait for all image uploads to complete.")
+                st.stop()
             saved_paths = prepare_image_paths(uploaded_images)
+            gc.collect()
             st.session_state.uploaded_image_paths = saved_paths
             st.session_state.show_output_radio_single = True
 
@@ -314,12 +334,15 @@ try:
         if up_json:
             st.session_state.batch_json_file_path = save_uploaded_file(up_json)
 
-        if st.button("Run Batch"):
+        if st.button("Run Batch") and up_csv is not None:
             if not st.session_state.get("batch_csv_file_path"):
                 st.error("❗ Please upload a valid Products CSV.")
                 st.stop()
-
+            if up_csv is None or (up_json and not up_json.getvalue()):
+                st.warning("⏳ Please wait for all file uploads to complete.")
+                st.stop()
             df = pd.read_csv(st.session_state.batch_csv_file_path, low_memory=False)
+            gc.collect()
             df.columns = [c.strip() for c in df.columns]
 
             required_cols = {"Listing Id", "Product Id", "Title", "Description"}
@@ -368,6 +391,11 @@ try:
                 try:
                     MAX_FAILS = 3
                     for _, row in df.iterrows():
+                        if monitor_memory():
+                            st.warning("🚨 Memory usage too high, stopping generation to avoid crash.")
+                            log.warning("Batch halted due to high memory usage.")
+                            st.stop()
+                            break
                         lid, pid = str(row["Listing Id"]), str(row["Product Id"])
                         sub = f"{lid}_{pid}"
                         title, desc = str(row["Title"]), str(row["Description"])
