@@ -139,7 +139,7 @@ def upload_output_files_to_drive(file_map: Dict[str, bytes], parent_folder: str,
 #             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
     # return outputs
 
-def retrieve_and_stream_output_files(folder_name: str, parent_folder: str, drive_service) -> dict:
+def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> dict:
     """
     Retrieves output files (video, blog) from Google Drive folder and streams them directly
     without storing them locally.
@@ -158,20 +158,20 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str, drive
         name = f["name"]
         try:
             # Stream the file directly from Google Drive
-            file_stream = _stream_file(f["id"], drive_service)
+            file_stream = _stream_file(f["id"])
             outputs[name] = file_stream
         except Exception as e:
             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
     
     return outputs
 
-def _stream_file(file_id, drive_service):
+def _stream_file(file_id):
     """
     Helper function to stream a file from Google Drive using the provided drive service.
     """
     try:
         # Create request to fetch the file
-        request = drive_service.files().get_media(fileId=file_id)
+        request = drive_db.files().get_media(fileId=file_id)
         fh = BytesIO()  # Use an in-memory file handle to store the streamed content
 
         # Use MediaIoBaseDownload to stream the file in chunks
