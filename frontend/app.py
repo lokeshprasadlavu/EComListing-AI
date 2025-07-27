@@ -182,13 +182,13 @@ try:
 
     # 🔘 Mode Selection
     if "last_mode" not in st.session_state:
-        st.session_state.last_mode = "Single Product"
+        st.session_state["last_mode"] = "Single Product"
 
     mode = st.sidebar.radio("Choose Mode", ["Single Product", "Batch of Products"], key="app_mode")
 
-    if st.session_state.last_mode != mode:
+    if st.session_state["last_mode"] != mode:
         full_reset_session_state()
-        st.session_state.last_mode = mode
+        st.session_state["last_mode"] = mode
 
     # Single Product Mode
     if mode == "Single Product":
@@ -217,29 +217,31 @@ try:
         if st.session_state.get("show_output_radio_single"):
             st.session_state["output_options"]= st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
             if st.button("Continue", key="continue_single"):
-                failed = False
-                with st.spinner("🎥 Generating content..."):
-                    try:
-                            slug = slugify(st.session_state["title"])
-                            files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
-                            payload = {
-                                "title": slug,
-                                "description": st.session_state["description"]
-                            }
-                            response = requests.post(BACKEND_URL, data=payload, files=files)
-                            response.raise_for_status()
-                            response_data = response.json()
-                            st.session_state["last_single_result"] = response_data
-                    except Exception as e:
-                        failed = True
-                        log.exception(f"Generation error.{e}")
-                        
-                if failed:
-                    st.error("❌ Generation failed. Please try again.")
-                    st.stop()
+                slug = slugify(st.session_state["title"])
+                existing_folder_id = drive_db.find_folder(slug, parent_id=outputs_id)
+                if existing_folder_id:
+                    log.info(f"⚠️ Skipping generation. Found existing folder in Drive: {slug}")
+                    st.session_state["last_single_result"] = {"folder": slug}
+                    display_output({"folder": slug})
                 else:
-                    st.subheader("Generated Output")
-                    display_output(response_data)
+                    with st.spinner("🎥 Generating content..."):
+                        try:
+                                files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
+                                payload = {
+                                    "title": slug,
+                                    "description": st.session_state["description"]
+                                }
+                                response = requests.post(BACKEND_URL, data=payload, files=files)
+                                response.raise_for_status()
+                                response_data = response.json()
+                                st.session_state["last_single_result"] = response_data
+                                st.subheader("Generated Output")
+                                display_output(response_data)
+                        except Exception as e:
+                            st.spinner().stop()
+                            log.exception(f"Generation error.{e}")
+                            st.error("❌ Generation failed. Please try again.")
+                            st.stop()
 
     # ✅ Batch Product Mode
     else:
@@ -264,7 +266,7 @@ try:
             if up_csv is None or (up_json and not up_json.getvalue()):
                 st.warning("⏳ Please wait for all file uploads to complete.")
                 st.stop()
-            df = pd.read_csv(st.session_state.batch_csv_file_path, low_memory=False)
+            df = pd.read_csv(st.session_state["batch_csv_file_path"], low_memory=False)
             gc.collect()
             df.columns = [c.strip() for c in df.columns]
 
@@ -298,10 +300,10 @@ try:
             })
 
         if st.session_state.get("show_output_radio_batch"):
-            st.session_state.output_options = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
+            st.session_state["output_options"] = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
 
             if st.button("Continue", key="continue_batch"):
-                df = pd.read_csv(st.session_state.batch_csv_file_path, low_memory=False)
+                df = pd.read_csv(st.session_state["batch_csv_file_path"], low_memory=False)
                 df.columns = [c.strip() for c in df.columns]
                 images_data = st.session_state["batch_images_data"]
                 try:
@@ -309,6 +311,14 @@ try:
                     for _, row in df.iterrows():
                         lid, pid = str(row["Listing Id"]), str(row["Product Id"])
                         sub = f"{lid}_{pid}"
+                        # Check if folder already exists for this batch
+                        existing_folder_id = drive_db.find_folder(sub, parent_id=outputs_id)
+
+                        if existing_folder_id:
+                            log.info(f"⚠️ Skipping generation of {sub} – Folder exists.")
+                            display_output({"folder": sub})
+                            continue
+
                         title, desc = str(row["Title"]), str(row["Description"])
                         key = (int(lid), int(pid)) if lid.isdigit() and pid.isdigit() else (lid, pid)
 
@@ -327,31 +337,32 @@ try:
                         if not title or not desc:
                             st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
                             continue
-
-                        try:
-                            response = requests.post(
-                                BACKEND_URL,
-                                data={
-                                    "listing_id": lid,
-                                    "product_id": pid,
-                                    "title": title,
-                                    "description": desc,
-                                    "image_urls": json.dumps(urls),
-                                }
-                            )
-                            response.raise_for_status()
-                            data = response.json()
-                            consecutive_failures = 0
-                        except Exception as ge:
-                            st.warning(f"⚠️ Skipping {sub} – Generation failed.")
-                            log.warning(f"[{sub}] GenerationError: {ge}")
-                            consecutive_failures += 1
-                            if consecutive_failures >= MAX_FAILS:
-                                break
-                            continue
-                        st.subheader(f"Generated for {sub}")
-                        display_output(data)
-                        gc.collect()
+                        with st.spinner(f"🔄 Generating content for {sub}..."):
+                            try:
+                                response = requests.post(
+                                    BACKEND_URL,
+                                    data={
+                                        "listing_id": lid,
+                                        "product_id": pid,
+                                        "title": title,
+                                        "description": desc,
+                                        "image_urls": json.dumps(urls),
+                                    }
+                                )
+                                response.raise_for_status()
+                                data = response.json()
+                                consecutive_failures = 0
+                            except Exception as ge:
+                                st.spinner().stop()
+                                st.warning(f"⚠️ Skipping {sub} – Generation failed.")
+                                log.warning(f"[{sub}] GenerationError: {ge}")
+                                consecutive_failures += 1
+                                if consecutive_failures >= MAX_FAILS:
+                                    break
+                                continue
+                            st.subheader(f"Generated for {sub}")
+                            display_output(data)
+                            gc.collect()
                 except Exception as e:
                     st.error("⚠️ Batch generation failed due to a technical issue. Please refresh and try again. If the issue persists, contact support.")
                     log.exception(f"Batch generation failed: {e}")
