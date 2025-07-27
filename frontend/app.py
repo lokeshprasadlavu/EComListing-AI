@@ -110,6 +110,7 @@ try:
         try:
             # Fetch and stream the files directly from Drive using the updated function
             outputs = retrieve_and_stream_output_files(folder_path, outputs_id)
+            log.info(f"Retrieved output files for {folder_path}: {outputs}")
         except Exception as e:
             st.error("⚠️ Failed to retrieve output files from Drive.")
             log.exception("Error fetching files.")

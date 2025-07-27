@@ -156,10 +156,19 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
     # Loop over files and stream them directly
     for f in files:
         name = f["name"]
+        mime_type = f["mimeType"]
         try:
-            # Stream the file directly from Google Drive
-            file_stream = _stream_file(f["id"])
-            outputs[name] = file_stream
+            # Check the mimeType to differentiate between video and blog content
+            if "video" in mime_type:
+                # Stream video file
+                file_stream = _stream_file(f["id"])
+                outputs["video"] = file_stream  # Assign the file stream to 'video' key
+            elif "text" in mime_type or "document" in mime_type:
+                # Stream blog content (txt or other document)
+                file_stream = _stream_file(f["id"])
+                outputs["blog"] = file_stream  # Assign the file stream to 'blog' key
+            else:
+                log.warning(f"⚠️ Skipping unsupported file type: {name}")
         except Exception as e:
             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
     
