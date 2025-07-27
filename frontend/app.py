@@ -207,7 +207,7 @@ try:
                                 "title": slug,
                                 "description": st.session_state["description"]
                             }
-                            response = requests.post(BACKEND_URL, data=payload, files=files)
+                            response = requests.post(BACKEND_URL, data=payload, image_files=files)
                             response.raise_for_status()
                             response_data = response.json()
                             st.session_state["last_single_result"] = response_data
