@@ -7,7 +7,7 @@ import fastjsonschema
 from fastjsonschema import JsonSchemaException
 
 import shared.drive_db as drive_db
-from shared.drive_db import list_files, download_file, find_or_create_folder
+from shared.drive_db import list_files, download_file, find_or_create_folder, _get_service
 from googleapiclient.http import MediaIoBaseDownload
 from io import BytesIO
 
@@ -171,7 +171,7 @@ def _stream_file(file_id):
     """
     try:
         # Create request to fetch the file
-        request = drive_db.files().get_media(fileId=file_id)
+        request = _get_service().files().get_media(fileId=file_id)
         fh = BytesIO()  # Use an in-memory file handle to store the streamed content
 
         # Use MediaIoBaseDownload to stream the file in chunks
