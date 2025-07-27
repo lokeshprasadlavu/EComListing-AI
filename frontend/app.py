@@ -123,16 +123,12 @@ try:
         # Loop through the files in the outputs dictionary
         for file_name, file_stream in outputs.items():
             try:
-                mime_type = file_stream.getbuffer().type  # Get mime type from the stream (if available)
-
-                # If the mime type contains 'video', assign it to video_file
-                if 'video' in mime_type.lower():
+                # Check if the file is a video based on its extension
+                if file_name.lower().endswith(('.mp4', '.avi', '.mkv', '.mov')):
                     video_file = file_stream  # Assign the video stream
-
-                # If the file name contains '_blog', assign it to blog_file
+                # Check if the file is a blog (based on '_blog' in the filename)
                 elif '_blog' in file_name.lower() and file_name.lower().endswith('.txt'):
                     blog_file = file_stream  # Assign the blog stream
-
             except Exception as e:
                 st.warning(f"⚠️ Failed to display {file_name}: {e}")
 
