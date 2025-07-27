@@ -28,7 +28,7 @@ def init_drive_service(
         except Exception as e:
             raise ValueError(f"OAuth authentication failed: {e}")
 
-    if sa_cfg:
+    elif sa_cfg:
         try:
             creds = service_account.Credentials.from_service_account_info(
                 {
