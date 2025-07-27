@@ -161,7 +161,7 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
             file_stream = _stream_file(f["id"])
             outputs[f["name"]] = file_stream 
         except Exception as e:
-            log.warning(f"⚠️ Failed to download {f["name"]} from {folder_name}: {e}")
+            log.warning(f"⚠️ Failed to download {id} from {folder_name}: {e}")
     return outputs
 
 def _stream_file(file_id):
