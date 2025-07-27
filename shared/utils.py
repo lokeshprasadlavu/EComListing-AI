@@ -1,14 +1,15 @@
 import logging as log
-import os
 import re
 import zipfile
 import requests
-from typing import List, Dict, Tuple
+from typing import List, Dict
 import fastjsonschema
 from fastjsonschema import JsonSchemaException
 
 import shared.drive_db as drive_db
 from shared.drive_db import list_files, download_file, find_or_create_folder
+from googleapiclient.http import MediaIoBaseDownload
+from io import BytesIO
 
 # ─── Image Download (for batch mode) ───
 def download_images(image_urls: List[str]) -> List[bytes]:
@@ -117,23 +118,70 @@ def upload_output_files_to_drive(file_map: Dict[str, bytes], parent_folder: str,
             log.error(f"❌ Failed to upload {filename}: {e}")
 
 # ─── Retrieve Output Files ───
-def retrieve_output_files_from_drive(folder_name: str, parent_folder: str) -> Dict[str, bytes]:
+# def retrieve_output_files_from_drive(folder_name: str, parent_folder: str) -> Dict[str, bytes]:
+#     """
+#     Returns output files from Drive folder: outputs/{folder_name}/
+#     For use in frontend app to fetch generated content.
+#     """
+#     folder_id = drive_db.find_folder(folder_name, parent_id=parent_folder)
+#     if not folder_id:
+#         raise RuntimeError(f"⚠️ Output folder '{folder_name}' not found in Drive.")
+
+#     files = list_files(parent_id=folder_id)
+#     outputs = {}
+
+#     for f in files:
+#         name = f["name"]
+#         try:
+#             buf = download_file(f["id"])
+#             outputs[name] = buf.read()
+#         except Exception as e:
+#             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
+    # return outputs
+
+def retrieve_and_stream_output_files(folder_name: str, parent_folder: str, drive_service) -> dict:
     """
-    Returns output files from Drive folder: outputs/{folder_name}/
-    For use in frontend app to fetch generated content.
+    Retrieves output files (video, blog) from Google Drive folder and streams them directly
+    without storing them locally.
     """
+    # Get the folder ID from Drive
     folder_id = drive_db.find_folder(folder_name, parent_id=parent_folder)
     if not folder_id:
         raise RuntimeError(f"⚠️ Output folder '{folder_name}' not found in Drive.")
-
+    
+    # Get the list of files in the folder
     files = list_files(parent_id=folder_id)
     outputs = {}
 
+    # Loop over files and stream them directly
     for f in files:
         name = f["name"]
         try:
-            buf = download_file(f["id"])
-            outputs[name] = buf.read()
+            # Stream the file directly from Google Drive
+            file_stream = _stream_file(f["id"], drive_service)
+            outputs[name] = file_stream
         except Exception as e:
             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
+    
     return outputs
+
+def _stream_file(file_id, drive_service):
+    """
+    Helper function to stream a file from Google Drive using the provided drive service.
+    """
+    try:
+        # Create request to fetch the file
+        request = drive_service.files().get_media(fileId=file_id)
+        fh = BytesIO()  # Use an in-memory file handle to store the streamed content
+
+        # Use MediaIoBaseDownload to stream the file in chunks
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()  # Stream in chunks
+
+        fh.seek(0)  # Reset cursor to the start of the file for reading
+        return fh  # Return the file handle, which can be used for streaming
+    except Exception as e:
+        log.error(f"Failed to stream file {file_id} from Drive: {e}")
+        raise RuntimeError(f"⚠️ Failed to stream file from Drive: {e}")

@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.config import load_config
 from shared.auth import init_drive_service
 import shared.drive_db as drive_db
-from shared.utils import slugify, validate_images_json, retrieve_output_files_from_drive
+from shared.utils import slugify, validate_images_json, retrieve_output_files_from_drive, retrieve_and_stream_output_files
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
@@ -99,7 +99,7 @@ try:
     
     def display_output(data):
         """
-        Display video and blog content from Google Drive based on session output options.
+        Display video and blog content based on session output options.
         Expects `data["folder"]` to be in the form of "outputs/slug".
         """
         folder_path = data.get("folder")
@@ -108,16 +108,17 @@ try:
             return
 
         try:
-            outputs = retrieve_output_files_from_drive(folder_path, outputs_id)
+            # Fetch and stream the files directly from Drive using the updated function
+            outputs = retrieve_and_stream_output_files(folder_path, outputs_id, svc)
         except Exception as e:
             st.error("⚠️ Failed to retrieve output files from Drive.")
-            log.exception(f"Files retrieval failed : {e}")
+            log.exception("Error fetching files.")
             return
 
         if st.session_state["output_options"] in ("Video only", "Video + Blog"):
-            video_url = outputs.get("video")
-            if video_url:
-                st.video(video_url)
+            video_file = outputs.get("video")
+            if video_file:
+                st.video(video_file)
             else:
                 st.warning("⚠️ Video not available.")
 
