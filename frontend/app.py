@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.config import load_config
 from shared.auth import init_drive_service
 import shared.drive_db as drive_db
-from shared.utils import slugify, validate_images_json, retrieve_output_files_from_drive, retrieve_and_stream_output_files
+from shared.utils import slugify, validate_images_json, retrieve_and_stream_output_files
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
