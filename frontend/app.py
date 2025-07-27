@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.config import load_config
 from shared.auth import init_drive_service
 import shared.drive_db as drive_db
-from shared.utils import slugify, validate_images_json, retrieve_output_files_from_drive, upload_output_files_to_drive
+from shared.utils import slugify, validate_images_json, retrieve_output_files_from_drive
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
@@ -200,9 +200,10 @@ try:
             if st.button("Continue", key="continue_single"):
                 with st.spinner("🎥 Generating content..."):
                     try:
+                            slug = slugify(st.session_state["title"])
                             files = [("images", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
                             payload = {
-                                "title": st.session_state["title"],
+                                "title": slug,
                                 "description": st.session_state["description"]
                             }
                             response = requests.post(BACKEND_URL, data=payload, files=files)

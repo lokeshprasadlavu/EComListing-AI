@@ -1,7 +1,7 @@
 import os
 import json
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any
 
 
 @dataclass
@@ -39,6 +39,7 @@ def load_config(secrets: Optional[Dict[str, Any]] = None) -> AppConfig:
     Loads configuration either from:
     - Streamlit secrets (as dict), or
     - Environment variables (when secrets is None)
+    Supports both OAuth and Service Account credentials.
     """
     source = secrets or os.environ
 
@@ -51,30 +52,21 @@ def load_config(secrets: Optional[Dict[str, Any]] = None) -> AppConfig:
     if not openai_api_key or not drive_folder_id:
         raise ValueError("Missing OPENAI_API_KEY or DRIVE_FOLDER_ID in config.")
 
-    # OAuth config
+    # ─── OAuth Config ───
     oauth_cfg = None
-    if "oauth" in source:
-        o = source["oauth"]
-    elif get("OAUTH_CLIENT_ID"):
-        o = {
-            "client_id":     get("OAUTH_CLIENT_ID"),
-            "client_secret": get("OAUTH_CLIENT_SECRET"),
-            "refresh_token": get("OAUTH_REFRESH_TOKEN"),
-            "token_uri":     get("OAUTH_TOKEN_URI", "https://oauth2.googleapis.com/token")
-        }
-    else:
-        o = None
-
-    if o:
+    oauth_keys = ["client_id", "client_secret", "refresh_token"]
+    if all(get(k) for k in oauth_keys):
         oauth_cfg = OAuthConfig(
-            client_id     = o["client_id"],
-            client_secret = o["client_secret"],
-            refresh_token = o["refresh_token"],
-            token_uri     = o["token_uri"]
+            client_id     = get("client_id"),
+            client_secret = get("client_secret"),
+            refresh_token = get("refresh_token"),
+            token_uri     = get("token_uri", "https://oauth2.googleapis.com/token")
         )
 
-    # Service Account config
+    # ─── Service Account Config ───
     sa_cfg = None
+    sa = None
+
     if "drive_service_account" in source:
         sa = source["drive_service_account"]
     elif get("DRIVE_SERVICE_ACCOUNT_JSON"):
@@ -82,8 +74,6 @@ def load_config(secrets: Optional[Dict[str, Any]] = None) -> AppConfig:
             sa = json.loads(get("DRIVE_SERVICE_ACCOUNT_JSON"))
         except Exception as e:
             raise ValueError(f"Failed to parse DRIVE_SERVICE_ACCOUNT_JSON: {e}")
-    else:
-        sa = None
 
     if sa:
         sa_cfg = ServiceAccountConfig(
