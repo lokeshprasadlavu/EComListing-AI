@@ -198,6 +198,7 @@ try:
         if st.session_state.get("show_output_radio_single"):
             st.session_state["output_options"]= st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
             if st.button("Continue", key="continue_single"):
+                failed = False
                 with st.spinner("🎥 Generating content..."):
                     try:
                             slug = slugify(st.session_state["title"])
@@ -210,12 +211,16 @@ try:
                             response.raise_for_status()
                             response_data = response.json()
                             st.session_state["last_single_result"] = response_data
-                            st.subheader("Generated Output")
-                            display_output(response_data)
                     except Exception as e:
-                        st.error("❌ Generation failed. Please try again.")
+                        failed = True
                         log.exception(f"Generation error.{e}")
-                        st.stop()
+                        
+                if failed:
+                    st.error("❌ Generation failed. Please try again.")
+                    st.stop()
+                else:
+                    st.subheader("Generated Output")
+                    display_output(response_data)
 
     # ✅ Batch Product Mode
     else:
