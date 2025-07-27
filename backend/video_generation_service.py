@@ -1,6 +1,8 @@
 import logging
 import os
+import io
 import shutil
+import tempfile
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -17,7 +19,9 @@ from gtts import gTTS
 from shared.utils import (
     download_images,
     slugify,
-    get_persistent_cache_dir
+    load_fonts_from_drive,
+    load_logo_from_drive,
+    upload_output_files_to_drive,
 )
 
 # ─── Logger Setup ───
@@ -27,17 +31,19 @@ log = logging.getLogger(__name__)
 # ─── Data Classes ───
 @dataclass
 class ServiceConfig:
-    audio_folder: str
-    fonts_zip_path: str
-    logo_path: str
-    output_base_folder: str
+    drive_service: any
+    drive_folder_id: str
+    fonts_folder_id: str
+    logo_folder_id: str
+    output_folder_id: str
     openai_api_key: str
 
 @dataclass
 class GenerationResult:
-    video_path: str
-    title_file: str
-    blog_file: str
+    folder: str
+    video: str
+    blog: str
+    title: str
 
 class GenerationError(Exception):
     pass
@@ -49,111 +55,115 @@ def generate_video(
     product_id: Optional[str],
     title: str,
     description: str,
-    image_urls: List[str],
+    image_urls: Optional[List[str]] = None,
+    image_files: Optional[List[bytes]] = None
 ) -> GenerationResult:
     base = f"{listing_id}_{product_id}" if listing_id and product_id and listing_id != product_id else slugify(title)
     log.info(f"🎬 Generating content for: {base}")
     
     os.environ["OPENAI_API_KEY"] = cfg.openai_api_key
-    persistent_dir = get_persistent_cache_dir(base)
-    audio_folder = os.path.join(persistent_dir, "audio")
-    os.makedirs(audio_folder, exist_ok=True)
-    workdir = os.path.join(persistent_dir, "workdir")
-    os.makedirs(workdir, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fonts = load_fonts_from_drive(cfg.fonts_folder_id)
+        logo = load_logo_from_drive(cfg.logo_folder_id)
 
-    local_images = download_images(image_urls, workdir)
-    if not local_images:
-        log.error(f"No images downloaded for {base}. URLs: {image_urls}")
-        raise GenerationError("❌ No images downloaded – check your URLs.")
+        try:
+            font = ImageFont.truetype(io.BytesIO(fonts["Poppins-Light.ttf"]), 35)
+            bold_font = ImageFont.truetype(io.BytesIO(fonts["Poppins-Bold.ttf"]), 38)
+        except Exception as e:
+            raise GenerationError(f"❌ Failed to load fonts: {e}")
 
-    transcript = generate_transcript(title, description)
-    if not transcript:
-        log.error(f"Transcript generation failed for {base}. Empty transcript.")
-        raise GenerationError("❌ Generation failed.")
-    
+        logo_img = Image.open(io.BytesIO(logo)).convert("RGBA").resize((150, 80))
 
-    font_path = os.path.join(cfg.fonts_zip_path, "Poppins-Light.ttf")
-    bold_font_path = os.path.join(cfg.fonts_zip_path, "Poppins-Bold.ttf")
-    if not os.path.exists(font_path) or not os.path.exists(bold_font_path):
-        raise GenerationError("Font not found.")
+        if image_files:
+            local_images = image_files
+        elif image_urls:
+            local_images = [b for _, b in download_images(image_urls)]
+        else:
+            raise GenerationError("No image input provided.")
 
-    try:
-        font = ImageFont.truetype(font_path, 35)
-        bold_font = ImageFont.truetype(bold_font_path, 38)
-    except Exception as e:
-        log.exception("Failed to load fonts")
-        raise GenerationError(f"Failed to load font: {e}")
+        if not local_images:
+            raise GenerationError("❌ No images available to generate video.")
 
-    slides = split_text_into_slides(transcript, font, 600, 3)
-    if len(slides) > len(local_images):
-        local_images *= (len(slides) // len(local_images)) + 1
+        transcript = generate_transcript(title, description)
+        if not transcript:
+            log.error(f"Transcript generation failed for {base}. Empty transcript.")
+            raise GenerationError("❌ Generation failed.")
 
-    logo_img = None
-    if os.path.exists(cfg.logo_path):
-        logo_img = Image.open(cfg.logo_path).convert("RGBA").resize((150, 80))
+        slides = split_text_into_slides(transcript, font, 600, 3)
+        if len(slides) > len(local_images):
+            local_images *= (len(slides) // len(local_images)) + 1
 
-    clips = []
-    audio_clips = []
-    for i, slide_text in enumerate(slides):
-        img = Image.open(local_images[i]).convert("RGB")
-        img.thumbnail((640, 360), Image.LANCZOS)
+        clips = []
+        audio_clips = []
+        for i, slide_text in enumerate(slides):
+            img = Image.open(io.BytesIO(local_images[i])).convert("RGB")
+            img.thumbnail((640, 360), Image.LANCZOS)
 
-        canvas = Image.new("RGB", (1280, 720), (255, 255, 255))
-        draw = ImageDraw.Draw(canvas)
+            canvas = Image.new("RGB", (1280, 720), (255, 255, 255))
+            draw = ImageDraw.Draw(canvas)
 
-        # Logo top-left
-        if logo_img:
-            canvas.paste(logo_img, (20, 20), logo_img)
+            # Logo top-left
+            if logo_img:
+                canvas.paste(logo_img, (20, 20), logo_img)
 
-        # Title text
-        draw.text((50, 200), title, font=bold_font, fill="black")
+            # Title text
+            draw.text((50, 200), title, font=bold_font, fill="black")
 
-        # Slide text
-        lines = slide_text.split('\n')
-        text_y = (720 - sum(font.getbbox(line)[3] + 10 for line in lines)) // 2
-        for line in lines:
-            draw.text((50, text_y), line, font=font, fill="black")
-            text_y += font.getbbox(line)[3] + 10
+            # Slide text
+            lines = slide_text.split('\n')
+            text_y = (720 - sum(font.getbbox(line)[3] + 10 for line in lines)) // 2
+            for line in lines:
+                draw.text((50, text_y), line, font=font, fill="black")
+                text_y += font.getbbox(line)[3] + 10
 
-        # Paste image on right
-        canvas.paste(img, (1280 - img.width - 50, (720 - img.height) // 2))
+            # Paste image on right
+            canvas.paste(img, (1280 - img.width - 50, (720 - img.height) // 2))
 
-        frame_path = os.path.join(workdir, f"frame_{i}.jpg")
-        canvas.save(frame_path)
+            frame_path = f"{tmpdir}/frame_{i}.jpg"
+            canvas.save(frame_path)
 
-        audio_path = os.path.join(audio_folder, f"{base}_slide_{i + 1}.mp3")
-        create_audio_with_gtts(slide_text, audio_path)
-        audio_clip = AudioFileClip(audio_path)
+            audio_path = f"{tmpdir}/{base}_slide_{i + 1}.mp3"
+            create_audio_with_gtts(slide_text, audio_path)
+            audio_clip = AudioFileClip(audio_path)
 
-        frame_clip = ImageClip(frame_path).set_duration(audio_clip.duration)
-        clips.append(frame_clip)
-        audio_clips.append(audio_clip)
+            frame_clip = ImageClip(frame_path).set_duration(audio_clip.duration)
+            clips.append(frame_clip)
+            audio_clips.append(audio_clip)
 
-    final_video = concatenate_videoclips(clips, method="compose")
-    final_audio = concatenate_audioclips(audio_clips)
-    final_output = final_video.set_audio(final_audio)
+        final_video = concatenate_videoclips(clips, method="compose")
+        final_audio = concatenate_audioclips(audio_clips)
+        final_output = final_video.set_audio(final_audio)
 
-    output_path = os.path.join(workdir, f"{base}.mp4")
-    final_output.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=24)
+        video_filename = f"{base}.mp4"
+        blog_filename = f"{base}_blog.txt"
+        title_filename = f"{base}_title.txt"
 
-    blog_file = os.path.join(workdir, f"{base}_blog.txt")
-    title_file = os.path.join(workdir, f"{base}_title.txt")
-    with open(blog_file, "w", encoding="utf-8") as bf:
-        bf.write(transcript)
-    with open(title_file, "w", encoding="utf-8") as tf:
-        tf.write(title)
+        video_path = f"{tmpdir}/{video_filename}"
+        blog_path = f"{tmpdir}/{blog_filename}"
+        title_path = f"{tmpdir}/{title_filename}"
 
-    persist_output = os.path.join(cfg.output_base_folder, base)
-    os.makedirs(persist_output, exist_ok=True)
-    shutil.copy(output_path, os.path.join(persist_output, os.path.basename(output_path)))
-    shutil.copy(blog_file, os.path.join(persist_output, os.path.basename(blog_file)))
-    shutil.copy(title_file, os.path.join(persist_output, os.path.basename(title_file)))
+        final_output.write_videofile(video_path, codec="libx264", audio_codec="aac", fps=24)
 
-    return GenerationResult(
-        video_path=os.path.join(persist_output, os.path.basename(output_path)),
-        title_file=os.path.join(persist_output, os.path.basename(title_file)),
-        blog_file=os.path.join(persist_output, os.path.basename(blog_file))
-    )
+        with open(blog_path, "w", encoding="utf-8") as bf:
+            bf.write(transcript)
+        with open(title_path, "w", encoding="utf-8") as tf:
+            tf.write(title)
+
+        file_map = {
+            video_filename: open(video_path, "rb").read(),
+            blog_filename: open(blog_path, "rb").read(),
+            title_filename: open(title_path, "rb").read(),
+        }
+
+        upload_output_files_to_drive(file_map, parent_folder=cfg.output_folder_id, base_name=base)
+
+        return GenerationResult(
+            folder=f"outputs/{base}",
+            video=video_filename,
+            blog=blog_filename,
+            title=title_filename
+        )
+
 
 
 # ─── Helpers ───
