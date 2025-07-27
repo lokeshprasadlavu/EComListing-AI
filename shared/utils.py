@@ -152,7 +152,7 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
     
     # Get the list of files in the folder
     files = list_files(parent_id=folder_id)
-    outputs = {}
+    outputs = {"video": [], "blog": []}
 
     # Loop over files and stream them directly based on mimeType
     for f in files:
@@ -163,11 +163,11 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
             if "video" in mime_type:
                 # Stream video file
                 video_stream = _stream_file(f["id"])
-                outputs["video"] = video_stream  # Assign the video file stream
+                outputs["video"].append(video_stream) # Assign the video file stream
             elif "text" in mime_type or "document" in mime_type:
                 # Stream blog content (txt or other document)
                 blog_stream = _stream_file(f["id"])
-                outputs["blog"] = blog_stream  # Assign the blog file stream
+                outputs["blog"].append(blog_stream)  # Assign the blog file stream
             else:
                 log.warning(f"⚠️ Skipping unsupported file type: {name}")
         except Exception as e:
