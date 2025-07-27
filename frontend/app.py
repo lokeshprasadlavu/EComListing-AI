@@ -202,12 +202,12 @@ try:
                 with st.spinner("🎥 Generating content..."):
                     try:
                             slug = slugify(st.session_state["title"])
-                            files = [("images", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
+                            files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
                             payload = {
                                 "title": slug,
                                 "description": st.session_state["description"]
                             }
-                            response = requests.post(BACKEND_URL, data=payload, image_files=files)
+                            response = requests.post(BACKEND_URL, data=payload, files=files)
                             response.raise_for_status()
                             response_data = response.json()
                             st.session_state["last_single_result"] = response_data
