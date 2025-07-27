@@ -77,7 +77,7 @@ def generate_video(
         if image_files:
             local_images = image_files
         elif image_urls:
-            local_images = [b for _, b in download_images(image_urls)]
+            local_images = download_images(image_urls)
         else:
             raise GenerationError("No image input provided.")
 
