@@ -143,6 +143,7 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
     """
     Retrieves output files (video, blog) from Google Drive folder and streams them directly
     without storing them locally.
+    Differentiates between video and blog based on mimeType.
     """
     # Get the folder ID from Drive
     folder_id = drive_db.find_folder(folder_name, parent_id=parent_folder)
@@ -153,27 +154,32 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
     files = list_files(parent_id=folder_id)
     outputs = {}
 
-    # Loop over files and stream them directly
+    # Loop over files and stream them directly based on mimeType
     for f in files:
         name = f["name"]
         mime_type = f["mimeType"]
         try:
-            # Check the mimeType to differentiate between video and blog content
+            # Check mimeType to differentiate between video and blog content
             if "video" in mime_type:
                 # Stream video file
-                file_stream = _stream_file(f["id"])
-                outputs["video"] = file_stream  # Assign the file stream to 'video' key
+                video_stream = _stream_file(f["id"])
+                outputs["video"] = video_stream  # Assign the video file stream
             elif "text" in mime_type or "document" in mime_type:
                 # Stream blog content (txt or other document)
-                file_stream = _stream_file(f["id"])
-                outputs["blog"] = file_stream  # Assign the file stream to 'blog' key
+                blog_stream = _stream_file(f["id"])
+                outputs["blog"] = blog_stream  # Assign the blog file stream
             else:
                 log.warning(f"⚠️ Skipping unsupported file type: {name}")
         except Exception as e:
             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
     
+    # If we couldn't retrieve the video or blog, we log the message
+    if not outputs.get("video"):
+        log.warning("⚠️ No video found in the output folder.")
+    if not outputs.get("blog"):
+        log.warning("⚠️ No blog found in the output folder.")
+    
     return outputs
-
 def _stream_file(file_id):
     """
     Helper function to stream a file from Google Drive using the provided drive service.
