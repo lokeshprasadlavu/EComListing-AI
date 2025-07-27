@@ -108,7 +108,7 @@ try:
             return
 
         try:
-            outputs = retrieve_output_files_from_drive(folder_path)
+            outputs = retrieve_output_files_from_drive(folder_path, outputs_id)
         except Exception as e:
             st.error("⚠️ Failed to retrieve output files from Drive.")
             log.exception(f"Files retrieval failed : {e}")
