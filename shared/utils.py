@@ -152,7 +152,7 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
     
     # Get the list of files in the folder
     files = list_files(parent_id=folder_id)
-    outputs = {"video": [], "blog": []}
+    outputs = {}
 
 
     # Loop over files and stream them directly
