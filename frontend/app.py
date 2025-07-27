@@ -117,8 +117,8 @@ try:
             return
 
         if st.session_state["output_options"] in ("Video only", "Video + Blog"):
-            video_file = outputs.get("video")
-            if not outputs.get("video"):
+            video_file = outputs.get("video", [None])[0]
+            if not video_file:
                 log.warning("⚠️ No video found in the output folder.")
             if video_file:
                 st.video(video_file)
@@ -126,8 +126,8 @@ try:
                 st.warning("⚠️ Video not available.")
 
         if st.session_state["output_options"] in ("Blog only", "Video + Blog"):
-            blog_content = outputs.get("blog")
-            if not outputs.get("blog"):
+            blog_content = outputs.get("blog", [None])[0]
+            if not blog_content:
                 log.warning("⚠️ No blog found in the output folder.")
             if blog_content:
                 st.markdown("**Blog Content**")
