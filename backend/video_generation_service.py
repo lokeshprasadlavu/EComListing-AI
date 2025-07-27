@@ -158,7 +158,7 @@ def generate_video(
         upload_output_files_to_drive(file_map, parent_folder=cfg.output_folder_id, base_name=base)
 
         return GenerationResult(
-            folder=f"outputs/{base}",
+            folder=f"{base}",
             video=video_filename,
             blog=blog_filename,
             title=title_filename
