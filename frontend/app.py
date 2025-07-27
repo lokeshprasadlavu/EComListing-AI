@@ -116,25 +116,41 @@ try:
             log.exception("Error fetching files.")
             return
 
-        if st.session_state["output_options"] in ("Video only", "Video + Blog"):
-            video_file = outputs.get("video", [None])[0]
-            if not video_file:
-                log.warning("⚠️ No video found in the output folder.")
-            if video_file:
-                st.video(video_file)
-            else:
-                st.warning("⚠️ Video not available.")
+        # Initialize variables to store video and blog content
+        video_file = None
+        blog_file = None
 
-        if st.session_state["output_options"] in ("Blog only", "Video + Blog"):
-            blog_content = outputs.get("blog", [None])[0]
-            if not blog_content:
-                log.warning("⚠️ No blog found in the output folder.")
-            if blog_content:
-                blog_text = blog_content.read().decode('utf-8')
-                st.markdown("**Blog Content**")
-                st.write(blog_text)
+        # Loop through the files in the outputs dictionary
+        for file_name, file_stream in outputs.items():
+            try:
+                mime_type = file_stream.getbuffer().type  # Get mime type from the stream (if available)
+
+                # If the mime type contains 'video', assign it to video_file
+                if 'video' in mime_type.lower():
+                    video_file = file_stream  # Assign the video stream
+
+                # If the file name contains '_blog', assign it to blog_file
+                elif '_blog' in file_name.lower() and file_name.lower().endswith('.txt'):
+                    blog_file = file_stream  # Assign the blog stream
+
+            except Exception as e:
+                st.warning(f"⚠️ Failed to display {file_name}: {e}")
+
+        # Display content based on output options
+        if st.session_state["output_options"] == "Video only" or st.session_state["output_options"] == "Video + Blog":
+            if video_file:
+                st.video(video_file)  # Display the video
             else:
-                st.warning("⚠️ Blog content not available.")
+                st.warning("⚠️ No video found in the output folder.")
+
+        if st.session_state["output_options"] == "Blog only" or st.session_state["output_options"] == "Video + Blog":
+            if blog_file:
+                blog_content = blog_file.read().decode('utf-8')
+                st.markdown("**Blog Content**")
+                st.write(blog_content)  # Display the blog content
+            else:
+                st.warning("⚠️ No blog found in the output folder.")
+
 
     def extract_image_urls_from_row(row, df_columns):
         col_map = {c.lower(): c for c in df_columns}
