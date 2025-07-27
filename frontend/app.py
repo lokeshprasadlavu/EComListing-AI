@@ -118,6 +118,8 @@ try:
 
         if st.session_state["output_options"] in ("Video only", "Video + Blog"):
             video_file = outputs.get("video")
+            if not outputs.get("video"):
+                log.warning("⚠️ No video found in the output folder.")
             if video_file:
                 st.video(video_file)
             else:
@@ -125,6 +127,8 @@ try:
 
         if st.session_state["output_options"] in ("Blog only", "Video + Blog"):
             blog_content = outputs.get("blog")
+            if not outputs.get("blog"):
+                log.warning("⚠️ No blog found in the output folder.")
             if blog_content:
                 st.markdown("**Blog Content**")
                 st.write(blog_content)

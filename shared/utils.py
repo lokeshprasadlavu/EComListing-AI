@@ -172,14 +172,8 @@ def retrieve_and_stream_output_files(folder_name: str, parent_folder: str) -> di
                 log.warning(f"⚠️ Skipping unsupported file type: {name}")
         except Exception as e:
             log.warning(f"⚠️ Failed to download {name} from {folder_name}: {e}")
-    
-    # If we couldn't retrieve the video or blog, we log the message
-    if not outputs.get("video"):
-        log.warning("⚠️ No video found in the output folder.")
-    if not outputs.get("blog"):
-        log.warning("⚠️ No blog found in the output folder.")
-    
     return outputs
+
 def _stream_file(file_id):
     """
     Helper function to stream a file from Google Drive using the provided drive service.
