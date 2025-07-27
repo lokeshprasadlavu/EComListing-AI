@@ -130,8 +130,9 @@ try:
             if not blog_content:
                 log.warning("⚠️ No blog found in the output folder.")
             if blog_content:
+                blog_text = blog_content.read().decode('utf-8')
                 st.markdown("**Blog Content**")
-                st.write(blog_content)
+                st.write(blog_text)
             else:
                 st.warning("⚠️ Blog content not available.")
 
