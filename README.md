@@ -44,7 +44,7 @@ EComListing-AI helps eCommerce businesses create **engaging multimedia content**
 
 ```bash
 git clone https://github.com/your-org/EComListing-AI.git
-cd EComListing-AI
+cd EComListing-AI/frontend
 ```
 
 ### 2. Install dependencies
