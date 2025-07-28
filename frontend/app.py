@@ -142,8 +142,8 @@ try:
             st.error(f"⚠️ Drive initialization error: {e}")
             st.stop()
     outputs_id = drive_db.find_or_create_folder("outputs", parent_id=cfg.drive_folder_id)
-    BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
-    lottie_url = "https://lottie.host/your-lottie-animation-url.json"
+    BACKEND_URL = st.secrets["api"]["backend_url"]
+    LOTTIE_URL = st.secrets["api"]["lottie_url"]
 
     class GenerationError(Exception):pass
 
