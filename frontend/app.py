@@ -191,27 +191,27 @@ try:
                     display_output({"folder": slug})
                 else:
                     loading_animation = st.empty()
-                    with loading_animation.container():
-                        st.markdown("🎥 Generating your content, please wait...")
-                        st_lottie(load_lottie_url(LOTTIE_URL))
-                        try:
-                                files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
-                                payload = {
-                                    "title": slug,
-                                    "description": st.session_state["description"]
-                                }
-                                response = requests.post(BACKEND_URL, data=payload, files=files)
-                                response.raise_for_status()
-                                response_data = response.json()
-                                st.session_state["last_single_result"] = response_data
-                                loading_animation.empty()
-                                st.subheader("Generated Output")
-                                display_output(response_data)
-                        except Exception as e:
-                            loading_animation.empty()
-                            log.exception(f"Generation error.{e}")
-                            st.error("❌ Generation failed. Please try again.")
-                            st.stop()
+                    try:
+                        with loading_animation.container():
+                            st.markdown("🎥 Generating your content, please wait...")
+                            st_lottie(load_lottie_url(LOTTIE_URL))
+                        files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
+                        payload = {
+                            "title": slug,
+                            "description": st.session_state["description"]
+                        }
+                        response = requests.post(BACKEND_URL, data=payload, files=files)
+                        response.raise_for_status()
+                        response_data = response.json()
+                        st.session_state["last_single_result"] = response_data
+                        loading_animation.empty()
+                        st.subheader("Generated Output")
+                        display_output(response_data)
+                    except Exception as e:
+                        loading_animation.empty()
+                        log.exception(f"Generation error.{e}")
+                        st.error("❌ Generation failed. Please try again.")
+                        st.stop()
 
     # ✅ Batch Product Mode
     else:
@@ -296,35 +296,35 @@ try:
                             st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
                             continue
                         loading_animation = st.empty()
-                        with loading_animation.container():
-                            st.markdown(f"🎥 Generating content for {sub}, please wait...")
-                            st_lottie(load_lottie_url(LOTTIE_URL))
-                            try:
-                                response = requests.post(
-                                    BACKEND_URL,
-                                    data={
-                                        "listing_id": lid,
-                                        "product_id": pid,
-                                        "title": title,
-                                        "description": desc,
-                                        "image_urls": json.dumps(urls),
-                                    }
-                                )
-                                response.raise_for_status()
-                                data = response.json()
-                                consecutive_failures = 0
-                                loading_animation.empty()
-                            except Exception as ge:
-                                loading_animation.empty()
-                                st.warning(f"⚠️ Skipping {sub} – Generation failed.")
-                                log.warning(f"[{sub}] GenerationError: {ge}")
-                                consecutive_failures += 1
-                                if consecutive_failures >= MAX_FAILS:
-                                    break
-                                continue
-                            st.subheader(f"Generated for {sub}")
-                            display_output(data)
-                            gc.collect()
+                        try:
+                            with loading_animation.container():
+                                st.markdown(f"🎥 Generating content for {sub}, please wait...")
+                                st_lottie(load_lottie_url(LOTTIE_URL))
+                            response = requests.post(
+                                BACKEND_URL,
+                                data={
+                                    "listing_id": lid,
+                                    "product_id": pid,
+                                    "title": title,
+                                    "description": desc,
+                                    "image_urls": json.dumps(urls),
+                                }
+                            )
+                            response.raise_for_status()
+                            data = response.json()
+                            consecutive_failures = 0
+                            loading_animation.empty()
+                        except Exception as ge:
+                            loading_animation.empty()
+                            st.warning(f"⚠️ Skipping {sub} – Generation failed.")
+                            log.warning(f"[{sub}] GenerationError: {ge}")
+                            consecutive_failures += 1
+                            if consecutive_failures >= MAX_FAILS:
+                                break
+                            continue
+                        st.subheader(f"Generated for {sub}")
+                        display_output(data)
+                        gc.collect()
                 except Exception as e:
                     st.error("⚠️ Batch generation failed due to a technical issue. Please refresh and try again. If the issue persists, contact support.")
                     log.exception(f"Batch generation failed: {e}")
