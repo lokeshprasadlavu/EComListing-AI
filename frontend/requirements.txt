@@ -4,7 +4,7 @@ requests
 pytest
 pyngrok
 fastjsonschema
-psutil
+streamlit-lottie
 
 # Shared db deps
 google-api-python-client

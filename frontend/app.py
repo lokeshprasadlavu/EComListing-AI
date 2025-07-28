@@ -12,46 +12,19 @@ import pandas as pd
 import time
 import logging
 import gc
-import psutil
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.config import load_config
 from shared.auth import init_drive_service
 import shared.drive_db as drive_db
 from shared.utils import slugify, validate_images_json, retrieve_and_stream_output_files
+from streamlit_lottie import st_lottie
 
 # ─── Logger Setup ───
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 try:
-    # Session Helpers
-    # def full_reset_session_state():
-    #     preserved_keys = {"cleared_cache", "last_mode", "last_interaction"}
-        
-    #     keys_to_clear = [
-    #         "output_options",
-    #         "show_output_radio_single",
-    #         "show_output_radio_batch",
-    #         "last_single_result",
-    #         "last_batch_folder",
-    #         "uploaded_image_paths",
-    #         "batch_csv_path",
-    #         "batch_json_path",
-    #         "batch_images_data",
-    #         "batch_csv_file_path",
-    #         "batch_json_file_path",
-    #         "input_signature",
-    #         "previous_input_hash",
-    #         "previous_input_hash_single",
-    #         "previous_input_hash_batch",
-    #         "title",
-    #         "description"
-    #     ]
-
-    #     for key in keys_to_clear:
-    #         if key not in preserved_keys:
-    #             st.session_state.pop(key, None)
     def full_reset_session_state():
         preserved_keys = {"last_mode", "last_interaction"}
         keys_to_clear = [key for key in list(st.session_state.keys()) if key not in preserved_keys]
@@ -93,13 +66,6 @@ try:
             log.error(f"Failed saving uploaded file: {e}")
             st.error("⚠️ File saving failed. Please re-upload.")
             st.stop()
-
-    # def display_output(data):
-    #     if st.session_state.output_options in ("Video only", "Video + Blog"):
-    #         st.video(data["video_path"])
-    #     if st.session_state.output_options in ("Blog only", "Video + Blog"):
-    #         st.markdown("**Blog Content**")
-    #         st.write(open(data["blog_file"], 'r').read())
     
     def display_output(data):
         """
@@ -161,6 +127,12 @@ try:
         split_urls = re.split(r"[,\n;]", raw)
         return [u.strip() for u in split_urls if re.search(r"\.(png|jpe?g)(\?|$)", u, re.IGNORECASE)]
 
+    def load_lottie_url(url: str):
+        r = requests.get(url)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    
     # ⚙️ Config and Services
     st.set_page_config(page_title="EComListing AI", layout="wide")
     handle_inactivity() 
@@ -180,7 +152,7 @@ try:
 
     outputs_id = drive_db.find_or_create_folder("outputs", parent_id=cfg.drive_folder_id)
     BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
-
+    lottie_url = "https://assets9.lottiefiles.com/packages/lf20_usmfx6bp.json"
     class GenerationError(Exception):
         pass
 
@@ -228,7 +200,9 @@ try:
                     st.session_state["last_single_result"] = {"folder": slug}
                     display_output({"folder": slug})
                 else:
-                    with st.spinner("🎥 Generating content..."):
+                    with st.empty().container():
+                        st.markdown("🎥 Generating your content, please wait...")
+                        st_lottie(load_lottie_url(lottie_url))
                         try:
                                 files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
                                 payload = {
@@ -341,7 +315,9 @@ try:
                         if not title or not desc:
                             st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
                             continue
-                        with st.spinner(f"🔄 Generating content for {sub}..."):
+                        with st.empty().container():
+                            st.markdown(f"🎥 Generating content for {sub}, please wait...")
+                            st_lottie(load_lottie_url(lottie_url))
                             try:
                                 response = requests.post(
                                     BACKEND_URL,
