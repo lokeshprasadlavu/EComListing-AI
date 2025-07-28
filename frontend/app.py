@@ -26,33 +26,37 @@ log = logging.getLogger(__name__)
 
 try:
     # Session Helpers
-    def full_reset_session_state():
-        preserved_keys = {"cleared_cache", "last_mode", "last_interaction"}
+    # def full_reset_session_state():
+    #     preserved_keys = {"cleared_cache", "last_mode", "last_interaction"}
         
-        keys_to_clear = [
-            "output_options",
-            "show_output_radio_single",
-            "show_output_radio_batch",
-            "last_single_result",
-            "last_batch_folder",
-            "uploaded_image_paths",
-            "batch_csv_path",
-            "batch_json_path",
-            "batch_images_data",
-            "batch_csv_file_path",
-            "batch_json_file_path",
-            "input_signature",
-            "previous_input_hash",
-            "previous_input_hash_single",
-            "previous_input_hash_batch",
-            "title",
-            "description"
-        ]
+    #     keys_to_clear = [
+    #         "output_options",
+    #         "show_output_radio_single",
+    #         "show_output_radio_batch",
+    #         "last_single_result",
+    #         "last_batch_folder",
+    #         "uploaded_image_paths",
+    #         "batch_csv_path",
+    #         "batch_json_path",
+    #         "batch_images_data",
+    #         "batch_csv_file_path",
+    #         "batch_json_file_path",
+    #         "input_signature",
+    #         "previous_input_hash",
+    #         "previous_input_hash_single",
+    #         "previous_input_hash_batch",
+    #         "title",
+    #         "description"
+    #     ]
 
+    #     for key in keys_to_clear:
+    #         if key not in preserved_keys:
+    #             st.session_state.pop(key, None)
+    def full_reset_session_state():
+        preserved_keys = {"last_mode", "last_interaction"}
+        keys_to_clear = [key for key in list(st.session_state.keys()) if key not in preserved_keys]
         for key in keys_to_clear:
-            if key not in preserved_keys:
-                st.session_state.pop(key, None)
-
+            st.session_state.pop(key, None)
 
     def detect_and_reset_on_input_change(context_id, input_parts):
         combined = ''.join(sorted(input_parts))
