@@ -97,6 +97,7 @@ try:
                 st.warning(f"⚠️ Failed to display {file_name}: {e}")
 
         # Display content based on output options
+        st.subheader(f"Generated Output for {folder_path}... ")
         if st.session_state["output_options"] == "Video only" or st.session_state["output_options"] == "Video + Blog":
             if video_file:
                 st.video(video_file)
@@ -191,7 +192,7 @@ try:
                     display_output({"folder": slug})
                 else:
                     loading_animation = st.empty()
-                    try:
+                    try:                       
                         with loading_animation.container():
                             st.markdown("🎥 Generating your content, please wait...")
                             st_lottie(load_lottie_url(LOTTIE_URL))
@@ -205,7 +206,6 @@ try:
                         response_data = response.json()
                         st.session_state["last_single_result"] = response_data
                         loading_animation.empty()
-                        st.subheader("Generated Output")
                         display_output(response_data)
                     except Exception as e:
                         loading_animation.empty()
@@ -322,7 +322,6 @@ try:
                             if consecutive_failures >= MAX_FAILS:
                                 break
                             continue
-                        st.subheader(f"Generated for {sub}")
                         display_output(data)
                         gc.collect()
                 except Exception as e:
