@@ -110,7 +110,6 @@ try:
             else:
                 st.warning("⚠️ No blog found in the output folder.")
 
-
     def extract_image_urls_from_row(row, df_columns):
         col_map = {c.lower(): c for c in df_columns}
         img_col = next((col_map[c] for c in col_map if "image" in c and "url" in c), None)
@@ -205,6 +204,7 @@ try:
                                 response.raise_for_status()
                                 response_data = response.json()
                                 st.session_state["last_single_result"] = response_data
+                                loading_animation.empty()
                                 st.subheader("Generated Output")
                                 display_output(response_data)
                         except Exception as e:
@@ -313,6 +313,7 @@ try:
                                 response.raise_for_status()
                                 data = response.json()
                                 consecutive_failures = 0
+                                loading_animation.empty()
                             except Exception as ge:
                                 loading_animation.empty()
                                 st.warning(f"⚠️ Skipping {sub} – Generation failed.")
