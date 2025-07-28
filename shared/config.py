@@ -42,11 +42,8 @@ def load_config(secrets: Optional[Dict[str, Any]] = None) -> AppConfig:
     Supports both OAuth and Service Account credentials.
     """
     source = secrets or os.environ
-
     def get(key: str, default=None):
         return source.get(key, default)
-
-    # Required keys
     openai_api_key = get("OPENAI_API_KEY")
     drive_folder_id = get("DRIVE_FOLDER_ID")
     if not openai_api_key or not drive_folder_id:

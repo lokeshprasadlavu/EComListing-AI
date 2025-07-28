@@ -35,13 +35,11 @@ try:
         combined = ''.join(sorted(input_parts))
         input_hash = hashlib.md5(combined.encode()).hexdigest()
         hash_key = f"previous_input_hash_{context_id}"
-
         if st.session_state.get(hash_key) != input_hash:
             full_reset_session_state()
             st.session_state[hash_key] = input_hash
 
-    INACTIVITY_TIMEOUT_SECONDS = 5 * 60  # 20 minutes
-
+    INACTIVITY_TIMEOUT_SECONDS = 5 * 60
     def handle_inactivity():
         now = time.time()
         last_touch = st.session_state.get("last_interaction", now)
@@ -76,9 +74,7 @@ try:
         if not folder_path:
             st.error("⚠️ Missing output folder reference.")
             return
-
         try:
-            # Fetch and stream the files directly from Drive using the updated function
             outputs = retrieve_and_stream_output_files(folder_path, outputs_id)
             log.info(f"Retrieved output files for {folder_path}: {outputs}")
         except Exception as e:
@@ -90,30 +86,27 @@ try:
         video_file = None
         blog_file = None
 
-        # Loop through the files in the outputs dictionary
+        # Loop through the files
         for file_name, file_stream in outputs.items():
             try:
-                # Check if the file is a video based on its extension
                 if file_name.lower().endswith(('.mp4', '.avi', '.mkv', '.mov')):
-                    video_file = file_stream  # Assign the video stream
-                # Check if the file is a blog (based on '_blog' in the filename)
+                    video_file = file_stream
                 elif '_blog' in file_name.lower() and file_name.lower().endswith('.txt'):
-                    blog_file = file_stream  # Assign the blog stream
+                    blog_file = file_stream
             except Exception as e:
                 st.warning(f"⚠️ Failed to display {file_name}: {e}")
 
         # Display content based on output options
         if st.session_state["output_options"] == "Video only" or st.session_state["output_options"] == "Video + Blog":
             if video_file:
-                st.video(video_file)  # Display the video
+                st.video(video_file)
             else:
                 st.warning("⚠️ No video found in the output folder.")
-
         if st.session_state["output_options"] == "Blog only" or st.session_state["output_options"] == "Video + Blog":
             if blog_file:
                 blog_content = blog_file.read().decode('utf-8')
                 st.markdown("**Blog Content**")
-                st.write(blog_content)  # Display the blog content
+                st.write(blog_content)
             else:
                 st.warning("⚠️ No blog found in the output folder.")
 
@@ -141,7 +134,6 @@ try:
     
     secrets = st.secrets
     cfg = load_config(secrets)
-
     with st.spinner("🔄 Connecting to Drive…"):
         try:
             svc = init_drive_service(oauth_cfg=cfg.oauth, sa_cfg=cfg.service_account)
@@ -149,12 +141,11 @@ try:
         except Exception as e:
             st.error(f"⚠️ Drive initialization error: {e}")
             st.stop()
-
     outputs_id = drive_db.find_or_create_folder("outputs", parent_id=cfg.drive_folder_id)
     BACKEND_URL = os.getenv("VIDEO_API_URL", "https://your-backend.app/generate")
-    lottie_url = "https://assets9.lottiefiles.com/packages/lf20_usmfx6bp.json"
-    class GenerationError(Exception):
-        pass
+    lottie_url = "https://lottie.host/your-lottie-animation-url.json"
+
+    class GenerationError(Exception):pass
 
     # 🔘 Mode Selection
     if "last_mode" not in st.session_state:
@@ -228,11 +219,9 @@ try:
 
         up_csv = st.file_uploader("Upload Products CSV", type="csv")
         up_json = st.file_uploader("Upload Images JSON (optional)", type="json")
-
         csv_name = up_csv.name if up_csv else ""
         json_name = up_json.name if up_json else ""
         detect_and_reset_on_input_change("batch", [csv_name, json_name])
-
         if up_csv:
             st.session_state["batch_csv_file_path"] = save_uploaded_file(up_csv)
         if up_json:
@@ -248,16 +237,13 @@ try:
             df = pd.read_csv(st.session_state["batch_csv_file_path"], low_memory=False)
             gc.collect()
             df.columns = [c.strip() for c in df.columns]
-
             required_cols = {"Listing Id", "Product Id", "Title", "Description"}
             missing = required_cols - set(df.columns)
             if missing:
                 st.error(f"❌ CSV is missing required columns: {', '.join(missing)}")
                 st.stop()
-
             img_col_exists = any("image" in c.lower() and "url" in c.lower() for c in df.columns)
             images_data = []
-
             if not img_col_exists and not st.session_state.get("batch_json_file_path"):
                 st.error("📂 Provide image URLs in CSV or upload JSON.")
                 st.stop()
@@ -269,7 +255,6 @@ try:
                 except ValueError as e:
                     st.error(str(e))
                     st.stop()
-
             st.session_state.update({
                 "batch_images_data": images_data,
                 "batch_csv_path": st.session_state.get("batch_csv_file_path", ""),
@@ -280,7 +265,6 @@ try:
 
         if st.session_state.get("show_output_radio_batch"):
             st.session_state["output_options"] = st.radio("Choose outputs:", ("Video only", "Blog only", "Video + Blog"), index=2)
-
             if st.button("Continue", key="continue_batch"):
                 df = pd.read_csv(st.session_state["batch_csv_file_path"], low_memory=False)
                 df.columns = [c.strip() for c in df.columns]
@@ -290,17 +274,13 @@ try:
                     for _, row in df.iterrows():
                         lid, pid = str(row["Listing Id"]), str(row["Product Id"])
                         sub = f"{lid}_{pid}"
-                        # Check if folder already exists for this batch
                         existing_folder_id = drive_db.find_folder(sub, parent_id=outputs_id)
-
                         if existing_folder_id:
                             log.info(f"⚠️ Skipping generation of {sub} – Folder exists.")
                             display_output({"folder": sub})
                             continue
-
                         title, desc = str(row["Title"]), str(row["Description"])
                         key = (int(lid), int(pid)) if lid.isdigit() and pid.isdigit() else (lid, pid)
-
                         urls = []
                         if images_data:
                             for entry in images_data:
@@ -309,7 +289,6 @@ try:
                                     break
                         else:
                             urls = extract_image_urls_from_row(row, df.columns)
-
                         if not urls:
                             st.warning(f"⚠️ Skipping {lid}/{pid} – No valid image URLs")
                             continue
