@@ -78,7 +78,6 @@ type = "service_account"
 project_id = "..."
 private_key = "..."
 client_email = "..."
-...
 ```
 
 ### 4. Run the app
