@@ -200,7 +200,8 @@ try:
                     st.session_state["last_single_result"] = {"folder": slug}
                     display_output({"folder": slug})
                 else:
-                    with st.empty().container():
+                    loading_animation = st.empty()
+                    with loading_animation.container():
                         st.markdown("🎥 Generating your content, please wait...")
                         st_lottie(load_lottie_url(lottie_url))
                         try:
@@ -216,7 +217,7 @@ try:
                                 st.subheader("Generated Output")
                                 display_output(response_data)
                         except Exception as e:
-                            st.spinner().stop()
+                            loading_animation.empty()
                             log.exception(f"Generation error.{e}")
                             st.error("❌ Generation failed. Please try again.")
                             st.stop()
@@ -315,7 +316,8 @@ try:
                         if not title or not desc:
                             st.warning(f"⚠️ Skipping {lid}/{pid} – Missing title or description")
                             continue
-                        with st.empty().container():
+                        loading_animation = st.empty()
+                        with loading_animation.container():
                             st.markdown(f"🎥 Generating content for {sub}, please wait...")
                             st_lottie(load_lottie_url(lottie_url))
                             try:
@@ -333,7 +335,7 @@ try:
                                 data = response.json()
                                 consecutive_failures = 0
                             except Exception as ge:
-                                st.spinner().stop()
+                                loading_animation.empty()
                                 st.warning(f"⚠️ Skipping {sub} – Generation failed.")
                                 log.warning(f"[{sub}] GenerationError: {ge}")
                                 consecutive_failures += 1
