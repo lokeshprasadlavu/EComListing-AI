@@ -38,6 +38,8 @@ EComListing-AI helps eCommerce businesses create **engaging multimedia content**
 
 ## 🔧 Getting Started
 
+## Frontend (Streamlit)
+
 ### 1. Clone the repo
 
 ```bash
@@ -55,36 +57,64 @@ pip install -r requirements.txt
 
 Create `.streamlit/secrets.toml`:
 
+In `frontend/.streamlit/secrets.toml`:
+
 ```toml
-# Required
-OPENAI_API_KEY  = "sk-..."
+[api]
+backend_url = "https://<your-railway-backend>.up.railway.app/generate"
+lottie_url = "https://assets8.lottiefiles.com/.../animation.json"
 
-DRIVE_FOLDER_ID = "your-google-drive-folder-id"
+DRIVE_FOLDER_ID = "your-root-folder-id"
 
-# Option A: OAuth (preferred for most users)
 [oauth_manual]
-client_id     = "..."
+client_id = "..."
 client_secret = "..."
 refresh_token = "..."
 
-# Option B: Service Account
+# OR
+
 [drive_service_account]
-type                          = "service_account"
-project_id                    = "..."
-private_key_id                = "..."
-private_key                   = "..."
-client_email                  = "..."
-client_id                     = "..."
-auth_uri                      = "https://accounts.google.com/o/oauth2/auth"
-token_uri                     = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url   = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url          = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+type = "service_account"
+project_id = "..."
+private_key = "..."
+client_email = "..."
+...
 ```
 
 ### 4. Run the app
 
 ```bash
 streamlit run app.py
+```
+
+---
+## 🚂 Backend (FastAPI / Flask on Railway)
+
+### ▶️ Deploy to Railway
+
+1. Go to [Railway](https://railway.app/)
+2. Create a new project, deploy `backend/`
+3. Set environment variables:
+   - `OPENAI_API_KEY`
+   - Any model-specific or Drive settings
+
+4. Confirm `/generate` route is accessible and returns output
+
+---
+
+## 🔗 Shared Package
+
+`frontend` and `backend` import modules from `shared/` like:
+
+```python
+from shared.auth import init_drive_service
+from shared.utils import slugify
+```
+
+Make sure Python paths are set correctly. In local/dev, this is handled via:
+
+```python
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 ```
 
 ---
@@ -96,7 +126,7 @@ streamlit run app.py
 2. Fill in **Title** and **Description**
 3. Upload images
 4. Click **Generate**
-5. Preview results, then hit **Continue** to save
+5. Preview results
 
 ### 📊 Batch Product Workflow
 1. Select **Batch Mode**
@@ -104,7 +134,7 @@ streamlit run app.py
    - `Listing Id`, `Product Id`, `Title`, `Description`
 3. Upload **Images JSON** (if CSV doesn’t contain image URLs)
 4. Click **Run Batch**
-5. Outputs will be previewed and saved for each product
+5. Outputs will be previewed
 
 ---
 
@@ -124,28 +154,32 @@ streamlit run app.py
 ---
 
 ## 📂 Project Structure
-
 ```
 EComListing-AI/
+├── frontend/           # Streamlit UI app
+│   └── requirements.txt         
+│   └── app.py
+│   └── .streamlit/
+│       └── secrets.toml  # (DO NOT COMMIT)
 │
-├── app.py                    ← Streamlit UI logic
-├── video_generation_service.py  ← Core logic for blog & video generation
-├── drive_db.py               ← Google Drive API wrapper
-├── utils.py                  ← Utility functions
-├── .streamlit/
-│   └── secrets.toml          ← API keys (DO NOT COMMIT)
-├── requirements.txt
+├── backend/             # FastAPI (or Flask) backend service
+│   └── main.py
+│   └── video_generation_service.py # Core logic for blog & video generation
+│   └── Dockerfile
+│   └── requirements.txt
+│
+├── shared/  # Reusable functions
+│   └── config.py
+│   └── auth.py
+│   └── drive_db.py
+│   └── utils.py
+│
 └── README.md
 ```
 
 ---
-
 ## 🧑‍💻 Contributing
 
-1. Fork the repo  
-2. Create your feature branch: `git checkout -b feat/your-feature`  
-3. Commit your changes: `git commit -m 'feat: added new feature'`  
-4. Push to branch: `git push origin feat/your-feature`  
-5. Open a Pull Request 🚀
+Pull requests are welcome! Fork the repo and open a PR from a feature branch.
 
 ---
