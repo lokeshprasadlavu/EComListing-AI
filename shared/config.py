@@ -28,7 +28,6 @@ class ServiceAccountConfig:
 
 @dataclass
 class AppConfig:
-    openai_api_key: str
     drive_folder_id: str
     oauth: Optional[OAuthConfig]
     service_account: Optional[ServiceAccountConfig]
@@ -44,10 +43,9 @@ def load_config(secrets: Optional[Dict[str, Any]] = None) -> AppConfig:
     source = secrets or os.environ
     def get(key: str, default=None):
         return source.get(key, default)
-    openai_api_key = get("OPENAI_API_KEY")
     drive_folder_id = get("DRIVE_FOLDER_ID")
-    if not openai_api_key or not drive_folder_id:
-        raise ValueError("Missing OPENAI_API_KEY or DRIVE_FOLDER_ID in config.")
+    if  not drive_folder_id:
+        raise ValueError("Missing DRIVE_FOLDER_ID in config.")
 
     # ─── OAuth Config ───
     oauth_cfg = None
@@ -87,7 +85,6 @@ def load_config(secrets: Optional[Dict[str, Any]] = None) -> AppConfig:
         )
 
     return AppConfig(
-        openai_api_key  = openai_api_key,
         drive_folder_id = drive_folder_id,
         oauth           = oauth_cfg,
         service_account = sa_cfg

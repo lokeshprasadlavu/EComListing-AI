@@ -194,7 +194,7 @@ try:
                     loading_animation = st.empty()
                     with loading_animation.container():
                         st.markdown("🎥 Generating your content, please wait...")
-                        st_lottie(load_lottie_url(lottie_url))
+                        st_lottie(load_lottie_url(LOTTIE_URL))
                         try:
                                 files = [("image_files", (img.name, img, img.type)) for img in st.session_state["uploaded_images"]]
                                 payload = {
@@ -298,7 +298,7 @@ try:
                         loading_animation = st.empty()
                         with loading_animation.container():
                             st.markdown(f"🎥 Generating content for {sub}, please wait...")
-                            st_lottie(load_lottie_url(lottie_url))
+                            st_lottie(load_lottie_url(LOTTIE_URL))
                             try:
                                 response = requests.post(
                                     BACKEND_URL,

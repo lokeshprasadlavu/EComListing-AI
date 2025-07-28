@@ -24,22 +24,13 @@ app = FastAPI()
 
 # ─── Load Configuration ───
 try:
-    secrets = {
-        "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
-        "DRIVE_FOLDER_ID": os.environ["DRIVE_FOLDER_ID"],
-    }
-
-    if "GOOGLE_SERVICE_ACCOUNT_JSON" in os.environ:
-        secrets["drive_service_account"] = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"])
-
     cfg = load_config()
-
     drive_service = init_drive_service(oauth_cfg=cfg.oauth, sa_cfg=cfg.service_account)
     drive_db.set_drive_service(drive_service)
-
     fonts_folder_id = drive_db.find_or_create_folder("fonts", parent_id=cfg.drive_folder_id)
     logo_folder_id = drive_db.find_or_create_folder("logo", parent_id=cfg.drive_folder_id)
     output_folder_id = drive_db.find_or_create_folder("outputs", parent_id=cfg.drive_folder_id)
+    openai_api_key = os.getenv("OPENAI_API_KEY")
 
     service_cfg = ServiceConfig(
         drive_service=drive_service,
@@ -47,7 +38,7 @@ try:
         fonts_folder_id=fonts_folder_id,
         logo_folder_id=logo_folder_id,
         output_folder_id=output_folder_id,
-        openai_api_key=cfg.openai_api_key,
+        openai_api_key=openai_api_key,
     )
 except Exception as e:
     log.exception(f"❌ Failed to initialize service: {e}")
